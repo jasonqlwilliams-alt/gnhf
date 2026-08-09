@@ -52,22 +52,28 @@ function threadIdOf(event: CodexThreadStarted): string | null {
   return typeof candidate === "string" && candidate ? candidate : null;
 }
 
-// `codex exec resume` is a narrower subcommand than `codex exec`: it rejects
-// the execution-mode flags below outright. Rather than silently downgrading a
-// user's sandbox choice or shelling out a command codex will refuse, gnhf
-// skips the empty-response continuation for these configurations.
+// `codex exec resume` is a narrower subcommand than `codex exec` and clap
+// rejects anything it does not declare. Rather than silently downgrading a
+// user's sandbox choice or shelling out a command codex will refuse - which
+// would replace the accurate empty-response diagnostic with a CLI usage error
+// - gnhf skips the empty-response continuation for these configurations.
+// Verified against codex-cli 0.147.0 by diffing `codex exec --help` against
+// `codex exec resume --help`; the approval flags are kept because older codex
+// releases still accept them on `codex exec` and resume rejects them too.
 const CODEX_RESUME_UNSUPPORTED_ARGS = [
-  "--full-auto",
+  "--add-dir",
+  "-C",
+  "--cd",
   "-s",
   "--sandbox",
-  "-a",
-  "--ask-for-approval",
   "--approve-for-me",
   "--oss",
   "--local-provider",
   "-p",
   "--profile",
-  "--color",
+  "--full-auto",
+  "-a",
+  "--ask-for-approval",
 ];
 
 function codexResumeUnsupportedArg(extraArgs?: string[]): string | null {

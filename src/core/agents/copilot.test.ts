@@ -272,13 +272,17 @@ describe("CopilotAgent", () => {
     expect(args[1]).toContain("should_fully_stop");
   });
 
-  it("continues the previous session once with the bare nudge when the turn had no assistant message", async () => {
+  it("resumes the reported session once with the bare nudge when the turn had no assistant message", async () => {
     const first = createMockProcess();
     const second = createMockProcess();
     mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
     const agent = new CopilotAgent();
 
     const promise = agent.run("test prompt", "/work/dir");
+    emitJson(first, {
+      type: "session.started",
+      data: { session_id: "session-abc" },
+    });
     emitJson(first, {
       type: "assistant.message",
       data: { outputTokens: 5 },
@@ -306,7 +310,8 @@ describe("CopilotAgent", () => {
     });
 
     expect(mockSpawn.mock.calls[1]![1]).toEqual([
-      "--continue",
+      "--resume",
+      "session-abc",
       "-p",
       "You did not produce a final answer. Continue and provide your final summary now.",
       "--output-format",
@@ -322,6 +327,23 @@ describe("CopilotAgent", () => {
     );
   });
 
+  it("does not re-ask when copilot reported no session id to resume", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new CopilotAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, { type: "assistant.message", data: { outputTokens: 5 } });
+    proc.emit("close", 0);
+
+    await expect(promise).rejects.toThrow(/no session id/);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    expect(mockAppendDebugLog).not.toHaveBeenCalledWith(
+      "copilot:output:continuation",
+      expect.anything(),
+    );
+  });
+
   it("rejects after exactly one re-ask when copilot still returns no assistant message", async () => {
     const first = createMockProcess();
     const second = createMockProcess();
@@ -329,6 +351,7 @@ describe("CopilotAgent", () => {
     const agent = new CopilotAgent();
 
     const promise = agent.run("test prompt", "/work/dir");
+    emitJson(first, { type: "session.started", session_id: "session-abc" });
     first.emit("close", 0);
 
     await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(2));

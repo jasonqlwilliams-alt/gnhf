@@ -1282,6 +1282,62 @@ describe("ClaudeAgent", () => {
     expect(mockSpawn).toHaveBeenCalledTimes(2);
   });
 
+  it("does not continue when --no-session-persistence makes the session unresumable", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const noPersistenceAgent = new ClaudeAgent({
+      extraArgs: ["--no-session-persistence"],
+    });
+
+    const promise = noPersistenceAgent.run("prompt", "/cwd");
+
+    emitLine(proc, {
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      session_id: "session-abc",
+      usage: {
+        input_tokens: 0,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+        output_tokens: 0,
+      },
+      structured_output: null,
+    });
+    proc.emit("close", 0);
+
+    await expect(promise).rejects.toThrow(/--no-session-persistence/);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    expect(mockAppendDebugLog).not.toHaveBeenCalledWith(
+      "claude:output:continuation",
+      expect.anything(),
+    );
+  });
+
+  it("does not continue when claude reported no session id", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    emitLine(proc, {
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      usage: {
+        input_tokens: 0,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+        output_tokens: 0,
+      },
+      structured_output: null,
+    });
+    proc.emit("close", 0);
+
+    await expect(promise).rejects.toThrow(/no session id/);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+  });
+
   it("does not continue when claude reported an error result", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);

@@ -312,21 +312,35 @@ describe("CodexAgent", () => {
     expect(mockSpawn).toHaveBeenCalledTimes(1);
   });
 
-  it("does not re-ask when configured codex args are unsupported by resume", async () => {
-    const proc = createMockProcess();
-    mockSpawn.mockReturnValue(proc);
-    const agent = new CodexAgent("/tmp/schema.json", {
-      extraArgs: ["--full-auto"],
-    });
+  // Each of these is accepted by `codex exec` but rejected by
+  // `codex exec resume`, so forwarding it would replace the accurate
+  // empty-response diagnostic with a codex CLI usage error.
+  it.each([
+    ["--add-dir", "/shared"],
+    ["-C", "/shared"],
+    ["--cd", "/shared"],
+    ["--sandbox", "workspace-write"],
+    ["--full-auto"],
+    ["--oss"],
+    ["--profile", "work"],
+  ])(
+    "does not re-ask when configured codex args include %s",
+    async (...extraArgs) => {
+      const proc = createMockProcess();
+      mockSpawn.mockReturnValue(proc);
+      const agent = new CodexAgent("/tmp/schema.json", { extraArgs });
 
-    const promise = agent.run("test prompt", "/work/dir");
-    emitJson(proc, threadStarted("thread-abc"));
-    emitJson(proc, turnCompleted(10, 5));
-    proc.emit("close", 0);
+      const promise = agent.run("test prompt", "/work/dir");
+      emitJson(proc, threadStarted("thread-abc"));
+      emitJson(proc, turnCompleted(10, 5));
+      proc.emit("close", 0);
 
-    await expect(promise).rejects.toThrow(/--full-auto.*codex exec resume/);
-    expect(mockSpawn).toHaveBeenCalledTimes(1);
-  });
+      await expect(promise).rejects.toThrow(
+        new RegExp(`${extraArgs[0]!.replace("-", "\\-")}.*codex exec resume`),
+      );
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("forwards resume-compatible user args to the continuation", async () => {
     const first = createMockProcess();

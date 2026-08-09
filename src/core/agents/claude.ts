@@ -155,6 +155,12 @@ function userSpecifiedSessionContinuation(userArgs: string[]): boolean {
   return userArgs.some((arg) => arg === "-c" || arg === "--continue");
 }
 
+// `--no-session-persistence` tells claude not to write the session to disk, so
+// there is nothing for `--resume` to reopen.
+function sessionPersistenceDisabled(userArgs: string[]): boolean {
+  return userArgs.some((arg) => arg === "--no-session-persistence");
+}
+
 function buildClaudeArgs(
   prompt: string,
   schema: AgentOutputSchema,
@@ -415,6 +421,7 @@ export class ClaudeAgent implements Agent {
       }
 
       let resultEvent: ClaudeResultEvent | null = null;
+      let turnSessionId: string | null = resumeSessionId;
       let finalStructuredResultEvent: ClaudeResultEvent | null = null;
       let latestResultUsage: ClaudeResultEvent["usage"] | null = null;
       let finalResultCleanupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -448,6 +455,7 @@ export class ClaudeAgent implements Agent {
       parseJSONLStream<ClaudeEvent>(child.stdout!, logFile, (event) => {
         const eventSessionId = (event as { session_id?: unknown }).session_id;
         if (typeof eventSessionId === "string" && eventSessionId) {
+          turnSessionId = eventSessionId;
           onSessionId(eventSessionId);
         }
 
@@ -600,17 +608,27 @@ export class ClaudeAgent implements Agent {
         }
 
         if (!terminalResultEvent.structured_output) {
+          const userArgs = this.extraArgs ?? [];
+          const resumeBlockedReason = sessionPersistenceDisabled(userArgs)
+            ? "--no-session-persistence disables session resume, so the turn cannot be continued"
+            : !turnSessionId && !userSpecifiedSessionContinuation(userArgs)
+              ? "claude reported no session id, so the turn cannot be resumed"
+              : null;
           appendDebugLog("claude:output:missing", {
             subtype: terminalResultEvent.subtype,
             resumed: resumeSessionId !== null,
+            hasSessionId: turnSessionId !== null,
+            resumeBlockedReason,
           });
           reject(
             new EmptyAgentResponseError(
-              "claude returned no structured_output",
+              resumeBlockedReason
+                ? `claude returned no structured_output (${resumeBlockedReason})`
+                : "claude returned no structured_output",
               {
                 // A non-error `result` event with subtype "success" is claude's
                 // own end-of-turn signal; it just carried no final answer.
-                turnCompleted: true,
+                turnCompleted: resumeBlockedReason === null,
                 usage: toTokenUsage(
                   latestResultUsage ?? terminalResultEvent.usage,
                 ),
