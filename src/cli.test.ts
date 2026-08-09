@@ -3215,6 +3215,7 @@ describe("cli", () => {
   });
 
   it("does not remove a worktree with commits when exit handler fires before preservation block", async () => {
+    vi.useFakeTimers();
     const removeWorktree = vi.fn();
     const exitHandlers: (() => void)[] = [];
     const processOnSpy = vi.spyOn(process, "on");
@@ -3226,7 +3227,7 @@ describe("cli", () => {
     }) as typeof process.on);
 
     try {
-      await runCliWithMocks(
+      const cliPromise = runCliWithMocks(
         ["ship it", "--worktree"],
         {
           agent: "claude",
@@ -3238,6 +3239,7 @@ describe("cli", () => {
         },
         {
           removeWorktree,
+          orchestratorStart: vi.fn(() => new Promise<void>(() => {})),
           orchestratorGetState: vi.fn(() => ({
             status: "completed" as const,
             gracefulStopRequested: false,
@@ -3255,9 +3257,18 @@ describe("cli", () => {
           })),
         },
       );
+      const exitPromise = expect(cliPromise).rejects.toThrow(
+        "process.exit unexpectedly called with 1",
+      );
 
-      // Simulate what happens on force-shutdown: exit handlers fire
-      // before the normal preservation block nulls out worktreeCleanup
+      await vi.waitFor(() => {
+        expect(exitHandlers).toHaveLength(1);
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+      await exitPromise;
+
+      // process.exit() synchronously runs exit handlers before control can
+      // reach the normal preservation block that nulls worktreeCleanup.
       for (const handler of exitHandlers) {
         handler();
       }
@@ -3265,6 +3276,7 @@ describe("cli", () => {
       expect(removeWorktree).not.toHaveBeenCalled();
     } finally {
       processOnSpy.mockRestore();
+      vi.useRealTimers();
     }
   });
 

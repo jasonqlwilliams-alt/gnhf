@@ -768,7 +768,7 @@ program
           // Ensure worktree cleanup runs even if die() or process.exit() is
           // called before reaching the normal cleanup block (e.g. orchestrator
           // crash to .catch to die to process.exit(1)).
-          // However, preserve worktrees that already have commits — the
+          // However, preserve worktrees that already have commits - the
           // normal preservation block (worktreeCleanup = null) may not have
           // run yet when force-shutdown or timeout triggers process.exit().
           const exitCleanup = worktreeCleanup;
@@ -783,7 +783,7 @@ program
                 return;
               }
             } catch {
-              // Orchestrator not yet created or already torn down — safe to
+              // Orchestrator not yet created or already torn down - safe to
               // clean up since no iteration could have committed anything.
             }
             exitCleanup();
