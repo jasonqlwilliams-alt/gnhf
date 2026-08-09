@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it } from "vitest";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const distCliPath = join(repoRoot, "dist", "cli.mjs");
 const fixtureBinDir = join(repoRoot, "e2e", "fixtures");
+const windowsFixtureBinDir = join(fixtureBinDir, "windows");
 
 // Empty gitconfig pointed at by GIT_CONFIG_GLOBAL/GIT_CONFIG_SYSTEM so the
 // developer's real ~/.gitconfig (which may enable commit.gpgsign, set a
@@ -165,7 +166,10 @@ function createTestEnv(
     ...sanitizedGitEnv,
     HOME: home,
     USERPROFILE: home,
-    PATH: `${fixtureBinDir}${process.platform === "win32" ? ";" : ":"}${process.env.PATH ?? ""}`,
+    PATH:
+      process.platform === "win32"
+        ? `${windowsFixtureBinDir};${fixtureBinDir};${process.env.PATH ?? ""}`
+        : `${fixtureBinDir}:${process.env.PATH ?? ""}`,
     GNHF_MOCK_OPENCODE_LOG_PATH: mockLogPath,
   };
 }
