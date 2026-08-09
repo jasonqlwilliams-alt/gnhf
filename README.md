@@ -186,6 +186,7 @@ Pass `--worktree` to run each agent in an isolated [git worktree](https://git-sc
 - Worktrees with commits are **preserved** after the run so you can review, merge, or cherry-pick the work. gnhf prints the path and cleanup command.
 - Re-running the same prompt with `--worktree` resumes a preserved matching worktree when possible; otherwise gnhf creates a suffixed worktree such as `<run-slug>-1` if the original name is unavailable.
 - Worktrees with **no commits** are automatically removed on exit unless a pending commit failure left uncommitted work to inspect or repair.
+- Known limitation: on Linux, when sleep prevention re-execs gnhf under `systemd-inhibit`, a worktree with no commits is left in place instead of being removed; remove it manually with `git worktree remove`. Tracked as `gnhf-reexec-worktree-leak-l1`.
 - `--worktree` must be run from a non-gnhf branch (typically `main`).
 
 ## CLI Reference
