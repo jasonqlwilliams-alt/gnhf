@@ -383,7 +383,8 @@ describe("gnhf e2e", () => {
     );
     expect(agentRunErrorEntry).toBeDefined();
     const agentError = agentRunErrorEntry?.error as
-      { message?: string } | undefined;
+      | { message?: string }
+      | undefined;
     expect(agentError?.message).toContain("OpenCode provider overloaded");
     expect(agentError?.message).not.toContain(
       "Failed to parse opencode output",
@@ -446,7 +447,8 @@ describe("gnhf e2e", () => {
       );
       expect(agentRunErrorEntry).toBeDefined();
       const agentError = agentRunErrorEntry?.error as
-        { message?: string } | undefined;
+        | { message?: string }
+        | undefined;
       expect(agentError?.message).toBe(expected);
 
       // The morning-after trace: notes.md is what the user actually reads.
