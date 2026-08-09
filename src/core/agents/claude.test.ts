@@ -935,6 +935,155 @@ describe("ClaudeAgent", () => {
     );
   });
 
+  it("surfaces a structured stdout error when stderr is empty", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    emitLine(proc, {
+      type: "result",
+      subtype: "error_during_execution",
+      is_error: true,
+      result: "Invalid model name: claude-nonexistent-5",
+    });
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toThrow(
+      "claude exited with code 1: Invalid model name: claude-nonexistent-5",
+    );
+  });
+
+  it("surfaces plain-text stdout output when stderr is empty", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    proc.stdout.emit(
+      "data",
+      Buffer.from("Invalid API key - please run /login"),
+    );
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toThrow(
+      "claude exited with code 1: Invalid API key - please run /login",
+    );
+  });
+
+  it("reports both streams when stderr and stdout carry output", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    proc.stderr.emit("data", Buffer.from("something broke"));
+    emitLine(proc, {
+      type: "error",
+      error: { message: "rate limit exceeded" },
+    });
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toThrow(
+      "claude exited with code 1: something broke\nrate limit exceeded",
+    );
+  });
+
+  it("bounds the stdout tail included in the failure detail", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    proc.stdout.emit("data", Buffer.from("x".repeat(10_000) + "tail marker"));
+    proc.emit("close", 1);
+
+    const message = await promise.then(
+      () => "",
+      (err: Error) => err.message,
+    );
+    expect(message).toContain("tail marker");
+    expect(message).toContain("[...truncated");
+    expect(message.length).toBeLessThan(600);
+  });
+
+  it("says so when a non-zero exit produced no output at all", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toThrow(
+      "claude exited with code 1 and produced no output",
+    );
+  });
+
+  it("marks a low credit balance reported on stdout as permanent", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    emitLine(proc, {
+      type: "result",
+      subtype: "error_during_execution",
+      is_error: true,
+      result: "Credit balance is too low to access Claude Code",
+    });
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toBeInstanceOf(PermanentAgentError);
+    await expect(promise).rejects.toMatchObject({
+      detail:
+        "claude exited with code 1: Credit balance is too low to access Claude Code",
+    });
+  });
+
+  it("keeps a run retryable when only agent output quotes a permanent failure", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    emitLine(proc, {
+      type: "assistant",
+      message: {
+        id: "msg-1",
+        usage: { input_tokens: 1, output_tokens: 1 },
+        content: [
+          {
+            type: "text",
+            text: "The docs say 'credit balance is too low' aborts the run.",
+          },
+        ],
+      },
+    });
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.not.toBeInstanceOf(PermanentAgentError);
+    await expect(promise).rejects.toThrow("claude exited with code 1:");
+  });
+
+  it("keeps a run retryable when unparseable stdout quotes a permanent failure", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    proc.stdout.emit(
+      "data",
+      Buffer.from("grep: README.md: credit balance is too low"),
+    );
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.not.toBeInstanceOf(PermanentAgentError);
+    await expect(promise).rejects.toThrow(
+      "claude exited with code 1: grep: README.md: credit balance is too low",
+    );
+  });
+
   it("marks low credit balance exits as permanent", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
