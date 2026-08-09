@@ -12,10 +12,6 @@ import {
 } from "./types.js";
 import { appendDebugLog } from "../debug-log.js";
 import {
-  EmptyAgentResponseError,
-  runTurnWithEmptyResponseRetry,
-} from "./empty-response.js";
-import {
   AgentLogFile,
   parseJSONLStream,
   setupAbortHandler,
@@ -38,29 +34,15 @@ type CopilotEvent =
   | CopilotAssistantMessageEvent
   | (CopilotUsageEvent & { type: string });
 
-const COPILOT_SESSION_ID_KEYS = ["session_id", "sessionId"];
-
-// Copilot's `--continue` picks a session by recency, which is not the same
-// thing as picking the turn that just went silent. An empty turn is exactly
-// the case where copilot may not have persisted a session at all, so the
-// continuation is only safe when copilot itself named a session. Nothing in
-// the JSONL contract guarantees that field, so when it is absent gnhf skips
-// recovery rather than nudging a session it cannot identify.
-function copilotSessionIdOf(event: unknown): string | null {
-  if (typeof event !== "object" || event === null) return null;
-  const record = event as Record<string, unknown>;
-  const containers: unknown[] = [record, record.data, record.session];
-
-  for (const container of containers) {
-    if (typeof container !== "object" || container === null) continue;
-    for (const key of COPILOT_SESSION_ID_KEYS) {
-      const value = (container as Record<string, unknown>)[key];
-      if (typeof value === "string" && value) return value;
-    }
-  }
-
-  return null;
-}
+// Copilot has no verified exact-session resume contract: `--continue` selects
+// by recency rather than identity, and nothing in its JSONL output is
+// documented to carry a session id that `--resume` would accept. Continuing
+// the wrong session would let the agent describe an earlier iteration's work
+// as if it were this turn's, so copilot is excluded from empty-response
+// recovery and reports why instead. See
+// https://github.com/kunchenguid/gnhf/issues/193.
+const COPILOT_EMPTY_RESPONSE_MESSAGE =
+  "copilot returned no agent message (copilot has no verified exact-session resume contract, so the empty response cannot be safely recovered)";
 
 interface CopilotAgentDeps {
   bin?: string;
@@ -175,31 +157,6 @@ function buildCopilotArgs(
   ];
 }
 
-// `--resume <session-id>` reopens that exact session, so the continuation turn
-// still sees the first turn's reasoning, tool calls, and the output contract it
-// was already given - the nudge itself stays bare.
-function buildCopilotResumeArgs(
-  prompt: string,
-  sessionId: string,
-  extraArgs?: string[],
-): string[] {
-  const userArgs = extraArgs ?? [];
-
-  return [
-    ...userArgs,
-    "--resume",
-    sessionId,
-    "-p",
-    prompt,
-    "--output-format",
-    "json",
-    "--stream",
-    "off",
-    "--no-color",
-    ...(userSpecifiedPermissionMode(userArgs) ? [] : ["--allow-all"]),
-  ];
-}
-
 function numberField(
   usage: Record<string, unknown>,
   names: string[],
@@ -270,24 +227,13 @@ export class CopilotAgent implements Agent {
   ): Promise<AgentResult> {
     const { onUsage, onMessage, signal, logPath } = options ?? {};
     const logFile = new AgentLogFile(logPath);
-    let sessionId: string | null = null;
 
     try {
-      return await runTurnWithEmptyResponseRetry({
-        logEvent: "copilot:output:continuation",
+      return await this.runTurn(prompt, cwd, {
         onUsage,
-        initialText: prompt,
-        runTurn: (text, onTurnUsage) =>
-          this.runTurn(text, cwd, {
-            onUsage: onTurnUsage,
-            onMessage,
-            signal,
-            logFile,
-            resumeSessionId: sessionId,
-            onSessionId: (id) => {
-              sessionId = id;
-            },
-          }),
+        onMessage,
+        signal,
+        logFile,
       });
     } finally {
       logFile.finish();
@@ -302,19 +248,14 @@ export class CopilotAgent implements Agent {
       onMessage?: OnMessage;
       signal?: AbortSignal;
       logFile: AgentLogFile;
-      resumeSessionId: string | null;
-      onSessionId: (sessionId: string) => void;
     },
   ): Promise<AgentResult> {
     const { onUsage, onMessage, signal, logFile } = options;
-    const { resumeSessionId, onSessionId } = options;
 
     return new Promise((resolve, reject) => {
       const child = spawn(
         this.bin,
-        resumeSessionId
-          ? buildCopilotResumeArgs(prompt, resumeSessionId, this.extraArgs)
-          : buildCopilotArgs(prompt, this.schema, this.extraArgs),
+        buildCopilotArgs(prompt, this.schema, this.extraArgs),
         {
           cwd,
           shell: shouldUseWindowsShell(this.bin, this.platform),
@@ -333,7 +274,6 @@ export class CopilotAgent implements Agent {
       }
 
       let lastAgentMessage: string | null = null;
-      let turnSessionId: string | null = resumeSessionId;
       const cumulative: TokenUsage = {
         inputTokens: 0,
         outputTokens: 0,
@@ -342,12 +282,6 @@ export class CopilotAgent implements Agent {
       };
 
       parseJSONLStream<CopilotEvent>(child.stdout!, logFile, (event) => {
-        const eventSessionId = copilotSessionIdOf(event);
-        if (eventSessionId) {
-          turnSessionId = eventSessionId;
-          onSessionId(eventSessionId);
-        }
-
         if (event.type === "assistant.message") {
           const data = (event as CopilotAssistantMessageEvent).data;
           if (typeof data.content === "string") {
@@ -377,26 +311,11 @@ export class CopilotAgent implements Agent {
 
       setupChildProcessHandlers(child, "copilot", reject, () => {
         if (!lastAgentMessage) {
-          const resumeBlockedReason = turnSessionId
-            ? null
-            : "copilot reported no session id, so the turn cannot be resumed";
           appendDebugLog("copilot:output:missing", {
-            hasSessionId: turnSessionId !== null,
-            resumeBlockedReason,
+            recoverable: false,
+            reason: "copilot has no verified exact-session resume contract",
           });
-          reject(
-            new EmptyAgentResponseError(
-              resumeBlockedReason
-                ? `copilot returned no agent message (${resumeBlockedReason})`
-                : "copilot returned no agent message",
-              {
-                // copilot exposes no end-of-turn event, so a clean exit is the
-                // only completion signal it gives.
-                turnCompleted: resumeBlockedReason === null,
-                usage: cumulative,
-              },
-            ),
-          );
+          reject(new Error(COPILOT_EMPTY_RESPONSE_MESSAGE));
           return;
         }
 

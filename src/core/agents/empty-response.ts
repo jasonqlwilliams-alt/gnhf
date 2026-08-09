@@ -1,4 +1,5 @@
-import { appendDebugLog } from "../debug-log.js";
+import { appendDebugLog, serializeError } from "../debug-log.js";
+import { PermanentAgentError } from "./types.js";
 import type { AgentResult, OnUsage, TokenUsage } from "./types.js";
 
 export const EMPTY_RESPONSE_CONTINUATION_PROMPT =
@@ -22,13 +23,20 @@ export class EmptyAgentResponseError extends Error {
 
   constructor(
     message: string,
-    options: { turnCompleted: boolean; usage: TokenUsage },
+    options: { turnCompleted: boolean; usage: TokenUsage; cause?: unknown },
   ) {
-    super(message);
+    super(message, { cause: options.cause });
     this.name = "EmptyAgentResponseError";
     this.turnCompleted = options.turnCompleted;
     this.usage = { ...options.usage };
   }
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "AbortError" || error.message === "Agent was aborted")
+  );
 }
 
 export function addTokenUsage(left: TokenUsage, right: TokenUsage): TokenUsage {
@@ -62,6 +70,14 @@ export interface EmptyResponseRetryOptions {
  * Runs one turn and, if it completed without a final message, runs exactly one
  * bare continuation turn. Usage reported to `onUsage` stays cumulative across
  * both turns; any other failure propagates untouched.
+ *
+ * If the continuation itself fails for a reason unrelated to the empty response
+ * - a CLI that refuses the resume command, say - the original empty-response
+ * diagnostic is what the user gets, with the continuation failure attached as
+ * `cause` and recorded in the run log. Recovery is best effort, so a broken
+ * continuation must never overwrite the accurate description of what went
+ * wrong. Aborts and permanent errors still propagate so `--max-tokens`, Ctrl+C,
+ * and abort-worthy provider failures behave exactly as before.
  */
 export async function runTurnWithEmptyResponseRetry({
   logEvent,
@@ -86,9 +102,33 @@ export async function runTurnWithEmptyResponseRetry({
       prompt: EMPTY_RESPONSE_CONTINUATION_PROMPT,
     });
 
-    const retry = await runTurn(EMPTY_RESPONSE_CONTINUATION_PROMPT, (usage) => {
-      onUsage?.(addTokenUsage(firstTurnUsage, usage));
-    });
+    let retry: AgentResult;
+    try {
+      retry = await runTurn(EMPTY_RESPONSE_CONTINUATION_PROMPT, (usage) => {
+        onUsage?.(addTokenUsage(firstTurnUsage, usage));
+      });
+    } catch (continuationError) {
+      if (
+        continuationError instanceof EmptyAgentResponseError ||
+        continuationError instanceof PermanentAgentError ||
+        isAbortError(continuationError)
+      ) {
+        throw continuationError;
+      }
+
+      appendDebugLog(logEvent, {
+        ...logFields,
+        attempt: 1,
+        continuationFailed: true,
+        error: serializeError(continuationError),
+      });
+
+      throw new EmptyAgentResponseError(error.message, {
+        turnCompleted: error.turnCompleted,
+        usage: firstTurnUsage,
+        cause: continuationError,
+      });
+    }
 
     return {
       output: retry.output,

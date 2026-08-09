@@ -76,6 +76,13 @@ const CODEX_RESUME_UNSUPPORTED_ARGS = [
   "--ask-for-approval",
 ];
 
+// `--ephemeral` is accepted by both `codex exec` and `codex exec resume`, so
+// the denylist above cannot catch it: the block is semantic. An ephemeral run
+// records no rollout, so resuming its thread id fails with "no rollout found".
+function codexRecordsNoRollout(extraArgs?: string[]): boolean {
+  return (extraArgs ?? []).includes("--ephemeral");
+}
+
 function codexResumeUnsupportedArg(extraArgs?: string[]): string | null {
   return (
     (extraArgs ?? []).find((arg) =>
@@ -344,9 +351,11 @@ export class CodexAgent implements Agent {
           const unsupportedArg = codexResumeUnsupportedArg(this.extraArgs);
           const resumeBlockedReason = !turnThreadId
             ? "codex reported no thread id, so the turn cannot be resumed"
-            : unsupportedArg
-              ? `configured codex arg "${unsupportedArg}" is not supported by \`codex exec resume\`, so the turn cannot be resumed`
-              : null;
+            : codexRecordsNoRollout(this.extraArgs)
+              ? "--ephemeral records no rollout, so the thread cannot be resumed"
+              : unsupportedArg
+                ? `configured codex arg "${unsupportedArg}" is not supported by \`codex exec resume\`, so the turn cannot be resumed`
+                : null;
           appendDebugLog("codex:output:missing", {
             sawTurnCompleted,
             hasThreadId: turnThreadId !== null,

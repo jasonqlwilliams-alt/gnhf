@@ -342,6 +342,58 @@ describe("CodexAgent", () => {
     },
   );
 
+  it("does not re-ask when --ephemeral leaves no rollout to resume", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new CodexAgent("/tmp/schema.json", {
+      extraArgs: ["--ephemeral"],
+    });
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, threadStarted("thread-abc"));
+    emitJson(proc, turnCompleted(10, 5));
+    proc.emit("close", 0);
+
+    await expect(promise).rejects.toThrow(/--ephemeral records no rollout/);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+    expect(mockAppendDebugLog).not.toHaveBeenCalledWith(
+      "codex:output:continuation",
+      expect.anything(),
+    );
+  });
+
+  it("keeps the empty-response diagnostic when the continuation spawn itself fails", async () => {
+    const first = createMockProcess();
+    const second = createMockProcess();
+    mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const agent = new CodexAgent("/tmp/schema.json");
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(first, threadStarted("thread-abc"));
+    emitJson(first, turnCompleted(10, 5));
+    first.emit("close", 0);
+
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(2));
+    second.stderr.emit(
+      "data",
+      Buffer.from("error: unexpected argument '--add-dir' found"),
+    );
+    second.emit("close", 2);
+
+    const error = await promise.then(
+      () => null,
+      (err: Error) => err,
+    );
+    expect(error?.message).toBe("codex returned no agent message");
+    expect((error?.cause as Error).message).toContain(
+      "codex exited with code 2",
+    );
+    expect(mockAppendDebugLog).toHaveBeenCalledWith(
+      "codex:output:continuation",
+      expect.objectContaining({ continuationFailed: true }),
+    );
+  });
+
   it("forwards resume-compatible user args to the continuation", async () => {
     const first = createMockProcess();
     const second = createMockProcess();

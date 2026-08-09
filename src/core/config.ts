@@ -165,10 +165,7 @@ function isReservedAgentArg(agent: AgentName, arg: string): boolean {
         arg === "--no-color" ||
         arg === "--share" ||
         arg.startsWith("--share=") ||
-        arg === "--share-gist" ||
-        arg === "--continue" ||
-        arg === "--resume" ||
-        arg.startsWith("--resume=")
+        arg === "--share-gist"
       );
     case "pi":
       return (

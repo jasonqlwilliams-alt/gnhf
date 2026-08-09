@@ -272,93 +272,27 @@ describe("CopilotAgent", () => {
     expect(args[1]).toContain("should_fully_stop");
   });
 
-  it("resumes the reported session once with the bare nudge when the turn had no assistant message", async () => {
-    const first = createMockProcess();
-    const second = createMockProcess();
-    mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
-    const agent = new CopilotAgent();
-
-    const promise = agent.run("test prompt", "/work/dir");
-    emitJson(first, {
-      type: "session.started",
-      data: { session_id: "session-abc" },
-    });
-    emitJson(first, {
-      type: "assistant.message",
-      data: { outputTokens: 5 },
-    });
-    first.emit("close", 0);
-
-    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(2));
-    emitJson(second, {
-      type: "assistant.message",
-      data: {
-        content: JSON.stringify({
-          success: true,
-          summary: "recovered",
-          key_changes_made: [],
-          key_learnings: [],
-        }),
-        outputTokens: 3,
-      },
-    });
-    second.emit("close", 0);
-
-    await expect(promise).resolves.toMatchObject({
-      output: { success: true, summary: "recovered" },
-      usage: { outputTokens: 8 },
-    });
-
-    expect(mockSpawn.mock.calls[1]![1]).toEqual([
-      "--resume",
-      "session-abc",
-      "-p",
-      "You did not produce a final answer. Continue and provide your final summary now.",
-      "--output-format",
-      "json",
-      "--stream",
-      "off",
-      "--no-color",
-      "--allow-all",
-    ]);
-    expect(mockAppendDebugLog).toHaveBeenCalledWith(
-      "copilot:output:continuation",
-      expect.objectContaining({ attempt: 1 }),
-    );
-  });
-
-  it("does not re-ask when copilot reported no session id to resume", async () => {
+  it("fails an empty response without retrying and names the missing resume contract", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
     const agent = new CopilotAgent();
 
     const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, {
+      type: "session.started",
+      data: { session_id: "session-abc" },
+    });
     emitJson(proc, { type: "assistant.message", data: { outputTokens: 5 } });
     proc.emit("close", 0);
 
-    await expect(promise).rejects.toThrow(/no session id/);
+    await expect(promise).rejects.toThrow(
+      /copilot returned no agent message.*resume contract/,
+    );
     expect(mockSpawn).toHaveBeenCalledTimes(1);
     expect(mockAppendDebugLog).not.toHaveBeenCalledWith(
       "copilot:output:continuation",
       expect.anything(),
     );
-  });
-
-  it("rejects after exactly one re-ask when copilot still returns no assistant message", async () => {
-    const first = createMockProcess();
-    const second = createMockProcess();
-    mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
-    const agent = new CopilotAgent();
-
-    const promise = agent.run("test prompt", "/work/dir");
-    emitJson(first, { type: "session.started", session_id: "session-abc" });
-    first.emit("close", 0);
-
-    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(2));
-    second.emit("close", 0);
-
-    await expect(promise).rejects.toThrow("copilot returned no agent message");
-    expect(mockSpawn).toHaveBeenCalledTimes(2);
   });
 
   it("does not re-ask when copilot exits non-zero", async () => {
