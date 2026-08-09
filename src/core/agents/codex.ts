@@ -1,12 +1,19 @@
 import { execFileSync, spawn } from "node:child_process";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, type WriteStream } from "node:fs";
 import type {
   Agent,
   AgentResult,
   AgentOutput,
+  OnMessage,
+  OnUsage,
   TokenUsage,
   AgentRunOptions,
 } from "./types.js";
+import { appendDebugLog } from "../debug-log.js";
+import {
+  EmptyAgentResponseError,
+  runTurnWithEmptyResponseRetry,
+} from "./empty-response.js";
 import {
   parseJSONLStream,
   setupAbortHandler,
@@ -133,16 +140,47 @@ export class CodexAgent implements Agent {
     this.schemaPath = schemaPath;
   }
 
-  run(
+  async run(
     prompt: string,
     cwd: string,
     options?: AgentRunOptions,
   ): Promise<AgentResult> {
     const { onUsage, onMessage, signal, logPath } = options ?? {};
+    const logStream = logPath ? createWriteStream(logPath) : null;
+
+    try {
+      // `--output-schema` is a spawn flag, so the continuation turn carries the
+      // same output contract without any extra prompt scaffolding.
+      return await runTurnWithEmptyResponseRetry({
+        logEvent: "codex:output:continuation",
+        onUsage,
+        initialText: prompt,
+        runTurn: (text, onTurnUsage) =>
+          this.runTurn(text, cwd, {
+            onUsage: onTurnUsage,
+            onMessage,
+            signal,
+            logStream,
+          }),
+      });
+    } finally {
+      logStream?.end();
+    }
+  }
+
+  private runTurn(
+    prompt: string,
+    cwd: string,
+    options: {
+      onUsage?: OnUsage;
+      onMessage?: OnMessage;
+      signal?: AbortSignal;
+      logStream: WriteStream | null;
+    },
+  ): Promise<AgentResult> {
+    const { onUsage, onMessage, signal, logStream } = options;
 
     return new Promise((resolve, reject) => {
-      const logStream = logPath ? createWriteStream(logPath) : null;
-
       const child = spawn(
         this.bin,
         buildCodexArgs(prompt, this.schemaPath, this.extraArgs),
@@ -163,6 +201,10 @@ export class CodexAgent implements Agent {
       }
 
       let lastAgentMessage: string | null = null;
+      // `turn.completed` is codex's own end-of-turn signal, so it - not a
+      // clean process exit - is what separates a finished-but-silent turn
+      // from a turn that never got to answer.
+      let sawTurnCompleted = false;
       const cumulative: TokenUsage = {
         inputTokens: 0,
         outputTokens: 0,
@@ -180,18 +222,27 @@ export class CodexAgent implements Agent {
           onMessage?.(lastAgentMessage);
         }
 
-        if (event.type === "turn.completed" && "usage" in event) {
-          const u = (event as CodexTurnCompleted).usage;
-          cumulative.inputTokens += u.input_tokens ?? 0;
-          cumulative.outputTokens += u.output_tokens ?? 0;
-          cumulative.cacheReadTokens += u.cached_input_tokens ?? 0;
-          onUsage?.({ ...cumulative });
+        if (event.type === "turn.completed") {
+          sawTurnCompleted = true;
+          if ("usage" in event) {
+            const u = (event as CodexTurnCompleted).usage;
+            cumulative.inputTokens += u.input_tokens ?? 0;
+            cumulative.outputTokens += u.output_tokens ?? 0;
+            cumulative.cacheReadTokens += u.cached_input_tokens ?? 0;
+            onUsage?.({ ...cumulative });
+          }
         }
       });
 
-      setupChildProcessHandlers(child, "codex", logStream, reject, () => {
+      setupChildProcessHandlers(child, "codex", reject, () => {
         if (!lastAgentMessage) {
-          reject(new Error("codex returned no agent message"));
+          appendDebugLog("codex:output:missing", { sawTurnCompleted });
+          reject(
+            new EmptyAgentResponseError("codex returned no agent message", {
+              turnCompleted: sawTurnCompleted,
+              usage: cumulative,
+            }),
+          );
           return;
         }
 

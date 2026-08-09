@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, type WriteStream } from "node:fs";
 import {
   buildAgentOutputSchema,
   parseAgentOutput,
@@ -8,8 +8,15 @@ import {
   type AgentOutputSchema,
   type AgentResult,
   type AgentRunOptions,
+  type OnMessage,
+  type OnUsage,
   type TokenUsage,
 } from "./types.js";
+import { appendDebugLog } from "../debug-log.js";
+import {
+  EmptyAgentResponseError,
+  runTurnWithEmptyResponseRetry,
+} from "./empty-response.js";
 import {
   parseJSONLStream,
   setupAbortHandler,
@@ -213,15 +220,48 @@ export class PiAgent implements Agent {
       deps.schema ?? buildAgentOutputSchema({ includeStopField: false });
   }
 
-  run(
+  async run(
     prompt: string,
     cwd: string,
     options?: AgentRunOptions,
   ): Promise<AgentResult> {
     const { onUsage, onMessage, signal, logPath } = options ?? {};
+    const logStream = logPath ? createWriteStream(logPath) : null;
+
+    try {
+      // Pi runs ephemerally (`--no-session`) and carries its output contract
+      // in the prompt, so the bare nudge is delivered through the same
+      // buildPiPrompt scaffolding rather than new schema machinery.
+      return await runTurnWithEmptyResponseRetry({
+        logEvent: "pi:output:continuation",
+        onUsage,
+        initialText: prompt,
+        runTurn: (text, onTurnUsage) =>
+          this.runTurn(text, cwd, {
+            onUsage: onTurnUsage,
+            onMessage,
+            signal,
+            logStream,
+          }),
+      });
+    } finally {
+      logStream?.end();
+    }
+  }
+
+  private runTurn(
+    prompt: string,
+    cwd: string,
+    options: {
+      onUsage?: OnUsage;
+      onMessage?: OnMessage;
+      signal?: AbortSignal;
+      logStream: WriteStream | null;
+    },
+  ): Promise<AgentResult> {
+    const { onUsage, onMessage, signal, logStream } = options;
 
     return new Promise((resolve, reject) => {
-      const logStream = logPath ? createWriteStream(logPath) : null;
       const child = spawn(this.bin, buildPiArgs(this.extraArgs), {
         cwd,
         detached: this.platform !== "win32",
@@ -358,7 +398,7 @@ export class PiAgent implements Agent {
         }
       });
 
-      setupChildProcessHandlers(child, "pi", logStream, reject, () => {
+      setupChildProcessHandlers(child, "pi", reject, () => {
         if (latestAssistantMessage) {
           const stopReason = latestAssistantMessage.stopReason;
           if (stopReason === "error" || stopReason === "aborted") {
@@ -379,7 +419,15 @@ export class PiAgent implements Agent {
           textByIndexToString(streamTextByIndex).trim();
 
         if (!finalText) {
-          reject(new Error("pi returned no text output"));
+          appendDebugLog("pi:output:missing", {});
+          reject(
+            new EmptyAgentResponseError("pi returned no text output", {
+              // pi's error and aborted stop reasons are already rejected
+              // above, so reaching here means the turn ended normally.
+              turnCompleted: true,
+              usage: lastEmittedUsage,
+            }),
+          );
           return;
         }
 

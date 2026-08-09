@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, type WriteStream } from "node:fs";
 import {
   buildAgentOutputSchema,
   parseAgentOutput,
@@ -7,8 +7,15 @@ import {
   type AgentOutputSchema,
   type AgentResult,
   type AgentRunOptions,
+  type OnMessage,
+  type OnUsage,
   type TokenUsage,
 } from "./types.js";
+import { appendDebugLog } from "../debug-log.js";
+import {
+  EmptyAgentResponseError,
+  runTurnWithEmptyResponseRetry,
+} from "./empty-response.js";
 import {
   parseJSONLStream,
   setupAbortHandler,
@@ -207,16 +214,48 @@ export class CopilotAgent implements Agent {
       deps.schema ?? buildAgentOutputSchema({ includeStopField: false });
   }
 
-  run(
+  async run(
     prompt: string,
     cwd: string,
     options?: AgentRunOptions,
   ): Promise<AgentResult> {
     const { onUsage, onMessage, signal, logPath } = options ?? {};
+    const logStream = logPath ? createWriteStream(logPath) : null;
+
+    try {
+      // Copilot carries its output contract in the prompt text, so the bare
+      // nudge goes through the same buildCopilotPrompt scaffolding the first
+      // turn used - no continuation-specific schema machinery.
+      return await runTurnWithEmptyResponseRetry({
+        logEvent: "copilot:output:continuation",
+        onUsage,
+        initialText: prompt,
+        runTurn: (text, onTurnUsage) =>
+          this.runTurn(text, cwd, {
+            onUsage: onTurnUsage,
+            onMessage,
+            signal,
+            logStream,
+          }),
+      });
+    } finally {
+      logStream?.end();
+    }
+  }
+
+  private runTurn(
+    prompt: string,
+    cwd: string,
+    options: {
+      onUsage?: OnUsage;
+      onMessage?: OnMessage;
+      signal?: AbortSignal;
+      logStream: WriteStream | null;
+    },
+  ): Promise<AgentResult> {
+    const { onUsage, onMessage, signal, logStream } = options;
 
     return new Promise((resolve, reject) => {
-      const logStream = logPath ? createWriteStream(logPath) : null;
-
       const child = spawn(
         this.bin,
         buildCopilotArgs(prompt, this.schema, this.extraArgs),
@@ -272,9 +311,17 @@ export class CopilotAgent implements Agent {
         }
       });
 
-      setupChildProcessHandlers(child, "copilot", logStream, reject, () => {
+      setupChildProcessHandlers(child, "copilot", reject, () => {
         if (!lastAgentMessage) {
-          reject(new Error("copilot returned no agent message"));
+          appendDebugLog("copilot:output:missing", {});
+          reject(
+            new EmptyAgentResponseError("copilot returned no agent message", {
+              // copilot exposes no end-of-turn event, so a clean exit is the
+              // only completion signal it gives.
+              turnCompleted: true,
+              usage: cumulative,
+            }),
+          );
           return;
         }
 

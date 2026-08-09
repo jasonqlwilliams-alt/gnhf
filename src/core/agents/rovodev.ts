@@ -774,6 +774,7 @@ export class RovoDevAgent implements Agent {
       appendDebugLog("rovodev:output:missing", { sessionId, sawClose });
       throw new EmptyAgentResponseError("rovodev returned no text output", {
         turnCompleted: sawClose,
+        usage: { ...usage },
       });
     }
 

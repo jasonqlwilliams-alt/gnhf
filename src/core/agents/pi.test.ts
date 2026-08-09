@@ -6,11 +6,19 @@ vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
 }));
 
+vi.mock("../debug-log.js", () => ({
+  appendDebugLog: vi.fn(),
+  initDebugLog: vi.fn(),
+  serializeError: vi.fn(),
+}));
+
 import { execFileSync, spawn } from "node:child_process";
+import { appendDebugLog } from "../debug-log.js";
 import { PiAgent } from "./pi.js";
 import { buildAgentOutputSchema } from "./types.js";
 
 const mockSpawn = vi.mocked(spawn);
+const mockAppendDebugLog = vi.mocked(appendDebugLog);
 
 function createMockProcess() {
   const proc = Object.assign(new EventEmitter(), {
@@ -359,7 +367,77 @@ describe("PiAgent", () => {
     await expect(promise).rejects.toThrow("Invalid pi output");
   });
 
-  it("rejects empty final text", async () => {
+  it("re-asks once with the bare nudge inside the usual output contract when the final text is empty", async () => {
+    const first = createMockProcess();
+    const second = createMockProcess();
+    mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const agent = new PiAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(first, {
+      type: "message_end",
+      message: {
+        role: "assistant",
+        id: "msg-1",
+        content: "   ",
+        usage: { input: 10, output: 5 },
+      },
+    });
+    first.emit("close", 0);
+
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(2));
+    emitJson(second, {
+      type: "message_end",
+      message: {
+        role: "assistant",
+        id: "msg-2",
+        content: finalOutput({ summary: "recovered" }),
+        usage: { input: 3, output: 2 },
+      },
+    });
+    second.emit("close", 0);
+
+    await expect(promise).resolves.toMatchObject({
+      output: { success: true, summary: "recovered" },
+      usage: { inputTokens: 13, outputTokens: 7 },
+    });
+
+    const continuationPrompt = second.stdin.write.mock.calls[0]![0] as string;
+    expect(continuationPrompt).toContain(
+      "You did not produce a final answer. Continue and provide your final summary now.",
+    );
+    expect(continuationPrompt).toContain("gnhf final output contract");
+    expect(mockAppendDebugLog).toHaveBeenCalledWith(
+      "pi:output:continuation",
+      expect.objectContaining({ attempt: 1 }),
+    );
+  });
+
+  it("rejects after exactly one re-ask when the continuation is also empty", async () => {
+    const first = createMockProcess();
+    const second = createMockProcess();
+    mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const agent = new PiAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(first, {
+      type: "message_end",
+      message: { role: "assistant", content: "   " },
+    });
+    first.emit("close", 0);
+
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(2));
+    emitJson(second, {
+      type: "message_end",
+      message: { role: "assistant", content: "   " },
+    });
+    second.emit("close", 0);
+
+    await expect(promise).rejects.toThrow("pi returned no text output");
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not re-ask when pi reports an error stop reason", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
     const agent = new PiAgent();
@@ -367,11 +445,17 @@ describe("PiAgent", () => {
     const promise = agent.run("test prompt", "/work/dir");
     emitJson(proc, {
       type: "message_end",
-      message: { role: "assistant", content: "   " },
+      message: {
+        role: "assistant",
+        content: "",
+        stopReason: "error",
+        errorMessage: "provider exploded",
+      },
     });
     proc.emit("close", 0);
 
-    await expect(promise).rejects.toThrow("pi returned no text output");
+    await expect(promise).rejects.toThrow("pi reported error: provider explod");
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
   });
 
   it("rejects malformed JSON", async () => {

@@ -73,20 +73,12 @@ describe("setupChildProcessHandlers", () => {
     const child = createMockChild();
     const reject = vi.fn();
     const onSuccess = vi.fn();
-    const logStream = { end: vi.fn() };
 
-    setupChildProcessHandlers(
-      child as never,
-      "codex",
-      logStream as never,
-      reject,
-      onSuccess,
-    );
+    setupChildProcessHandlers(child as never, "codex", reject, onSuccess);
 
     child.stderr.emit("data", Buffer.from("boom"));
     child.emit("close", 2);
 
-    expect(logStream.end).toHaveBeenCalledTimes(1);
     expect(onSuccess).not.toHaveBeenCalled();
     expect(reject).toHaveBeenCalledWith(
       new Error("codex exited with code 2: boom"),
@@ -97,15 +89,8 @@ describe("setupChildProcessHandlers", () => {
     const child = createMockChild();
     const reject = vi.fn();
     const onSuccess = vi.fn();
-    const logStream = { end: vi.fn() };
 
-    setupChildProcessHandlers(
-      child as never,
-      "rovodev",
-      logStream as never,
-      reject,
-      onSuccess,
-    );
+    setupChildProcessHandlers(child as never, "rovodev", reject, onSuccess);
 
     child.emit("error", new Error("ENOENT"));
     expect(reject).toHaveBeenCalledWith(
@@ -113,7 +98,6 @@ describe("setupChildProcessHandlers", () => {
     );
 
     child.emit("close", 0);
-    expect(logStream.end).toHaveBeenCalledTimes(1);
     expect(onSuccess).toHaveBeenCalledTimes(1);
   });
 });

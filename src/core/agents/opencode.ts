@@ -859,6 +859,13 @@ export class OpenCodeAgent implements Agent {
       onMessage?.(trimmed);
     };
 
+    // `sawSessionIdle` means the session really reported idle, so it is the
+    // only safe gate for an empty-response continuation. `streamTerminated`
+    // is the broader "stop reading" signal and is also set by provider
+    // errors, which must never qualify for a nudge.
+    let sawSessionIdle = false;
+    let streamTerminated = false;
+
     const handleEvent = (event: OpenCodeStreamEvent) => {
       const errorInfo = extractStreamError(event, sessionId);
       if (errorInfo) {
@@ -919,13 +926,17 @@ export class OpenCodeAgent implements Agent {
         return false;
       }
 
-      return payload?.type === "session.idle";
+      if (payload?.type === "session.idle") {
+        sawSessionIdle = true;
+        return true;
+      }
+
+      return false;
     };
 
     const decoder = new TextDecoder();
     const reader = eventResponse.body.getReader();
     let buffer = "";
-    let sawSessionIdle = false;
 
     const processRawEvent = (rawEvent: string) => {
       if (!rawEvent.trim()) return;
@@ -940,7 +951,7 @@ export class OpenCodeAgent implements Agent {
         const event = JSON.parse(dataLines.join("\n")) as OpenCodeStreamEvent;
         noteEvent(event.payload?.type);
         if (handleEvent(event)) {
-          sawSessionIdle = true;
+          streamTerminated = true;
         }
       } catch {
         // Ignore malformed SSE events.
@@ -968,7 +979,7 @@ export class OpenCodeAgent implements Agent {
 
         processRawEvent(buffer.slice(0, boundary));
         buffer = buffer.slice(boundary + separatorLen);
-        if (sawSessionIdle) return;
+        if (streamTerminated) return;
       }
 
       if (flushRemainder && buffer.trim()) {
@@ -979,7 +990,7 @@ export class OpenCodeAgent implements Agent {
 
     let bytesRead = 0;
     try {
-      while (!sawSessionIdle) {
+      while (!streamTerminated) {
         let readResult: ReadableStreamReadResult<Uint8Array>;
         try {
           readResult = await reader.read();
@@ -1045,6 +1056,7 @@ export class OpenCodeAgent implements Agent {
       elapsedMs: Date.now() - streamStartedAt,
       bytesRead,
       sawSessionIdle,
+      streamTerminated,
       telemetry: buildTelemetry(),
     });
 
@@ -1098,6 +1110,7 @@ export class OpenCodeAgent implements Agent {
       });
       throw new EmptyAgentResponseError("OpenCode produced no final answer", {
         turnCompleted: sawSessionIdle,
+        usage: { ...usage },
       });
     }
 

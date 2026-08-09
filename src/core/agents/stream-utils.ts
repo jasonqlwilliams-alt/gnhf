@@ -3,14 +3,17 @@ import type { Readable } from "node:stream";
 import type { WriteStream } from "node:fs";
 
 /**
- * Wire stderr collection, spawn-error handling, and the common close-handler
- * prefix (logStream.end + non-zero exit code rejection) for a child process.
- * Calls `onSuccess` only when the process exits with code 0.
+ * Wire stderr collection, spawn-error handling, and non-zero exit rejection
+ * for a child process. Calls `onSuccess` only when the process exits with
+ * code 0.
+ *
+ * The log stream is deliberately not owned here: an agent run can span more
+ * than one spawn (an empty-response continuation reuses the same log file),
+ * so the caller closes it once the whole run is done.
  */
 export function setupChildProcessHandlers(
   child: ChildProcess,
   agentName: string,
-  logStream: WriteStream | null,
   reject: (err: Error) => void,
   onSuccess: () => void,
 ): void {
@@ -25,7 +28,6 @@ export function setupChildProcessHandlers(
   });
 
   child.on("close", (code) => {
-    logStream?.end();
     if (code !== 0) {
       reject(new Error(`${agentName} exited with code ${code}: ${stderr}`));
       return;

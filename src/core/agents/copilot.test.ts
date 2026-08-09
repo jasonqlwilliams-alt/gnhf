@@ -6,11 +6,19 @@ vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
 }));
 
+vi.mock("../debug-log.js", () => ({
+  appendDebugLog: vi.fn(),
+  initDebugLog: vi.fn(),
+  serializeError: vi.fn(),
+}));
+
 import { execFileSync, spawn } from "node:child_process";
+import { appendDebugLog } from "../debug-log.js";
 import { CopilotAgent } from "./copilot.js";
 import { buildAgentOutputSchema } from "./types.js";
 
 const mockSpawn = vi.mocked(spawn);
+const mockAppendDebugLog = vi.mocked(appendDebugLog);
 
 function createMockProcess() {
   const proc = Object.assign(new EventEmitter(), {
@@ -264,15 +272,77 @@ describe("CopilotAgent", () => {
     expect(args[1]).toContain("should_fully_stop");
   });
 
-  it("rejects when copilot returns no assistant message", async () => {
+  it("re-asks once with the bare nudge inside the usual output contract when the turn had no assistant message", async () => {
+    const first = createMockProcess();
+    const second = createMockProcess();
+    mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const agent = new CopilotAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(first, {
+      type: "assistant.message",
+      data: { outputTokens: 5 },
+    });
+    first.emit("close", 0);
+
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(2));
+    emitJson(second, {
+      type: "assistant.message",
+      data: {
+        content: JSON.stringify({
+          success: true,
+          summary: "recovered",
+          key_changes_made: [],
+          key_learnings: [],
+        }),
+        outputTokens: 3,
+      },
+    });
+    second.emit("close", 0);
+
+    await expect(promise).resolves.toMatchObject({
+      output: { success: true, summary: "recovered" },
+      usage: { outputTokens: 8 },
+    });
+
+    const continuationPrompt = (mockSpawn.mock.calls[1]![1] as string[])[1]!;
+    expect(continuationPrompt).toContain(
+      "You did not produce a final answer. Continue and provide your final summary now.",
+    );
+    expect(continuationPrompt).toContain("gnhf final output contract");
+    expect(mockAppendDebugLog).toHaveBeenCalledWith(
+      "copilot:output:continuation",
+      expect.objectContaining({ attempt: 1 }),
+    );
+  });
+
+  it("rejects after exactly one re-ask when copilot still returns no assistant message", async () => {
+    const first = createMockProcess();
+    const second = createMockProcess();
+    mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const agent = new CopilotAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    first.emit("close", 0);
+
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(2));
+    second.emit("close", 0);
+
+    await expect(promise).rejects.toThrow("copilot returned no agent message");
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not re-ask when copilot exits non-zero", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
     const agent = new CopilotAgent();
 
     const promise = agent.run("test prompt", "/work/dir");
-    proc.emit("close", 0);
+    proc.stderr.emit("data", Buffer.from("boom"));
+    proc.emit("close", 1);
 
-    await expect(promise).rejects.toThrow("copilot returned no agent message");
+    await expect(promise).rejects.toThrow("copilot exited with code 1");
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
   });
 
   it("rejects when the final assistant message is not valid JSON", async () => {

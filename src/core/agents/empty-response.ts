@@ -10,14 +10,24 @@ export const EMPTY_RESPONSE_CONTINUATION_PROMPT =
  * continuation nudge can recover - from "the transport died before the turn
  * ended", where nudging would post into a session that is still working (or
  * gone) and would replace a clear diagnostic with a transport error.
+ *
+ * `usage` is what the empty turn actually cost. It is required so the tokens
+ * burned by a turn that never returned an `AgentResult` stay part of the
+ * iteration total instead of depending on whichever `onUsage` callback the
+ * adapter happened to fire last.
  */
 export class EmptyAgentResponseError extends Error {
   readonly turnCompleted: boolean;
+  readonly usage: TokenUsage;
 
-  constructor(message: string, options: { turnCompleted: boolean }) {
+  constructor(
+    message: string,
+    options: { turnCompleted: boolean; usage: TokenUsage },
+  ) {
     super(message);
     this.name = "EmptyAgentResponseError";
     this.turnCompleted = options.turnCompleted;
+    this.usage = { ...options.usage };
   }
 }
 
@@ -48,15 +58,19 @@ export interface EmptyResponseRetryOptions {
   logEvent: string;
   logFields?: Record<string, unknown>;
   onUsage?: OnUsage;
-  /** Prompt for the first turn. The continuation turn is always the bare nudge. */
+  /**
+   * Text for the first turn. The continuation turn is always the bare nudge -
+   * adapters that cannot parse a bare turn apply their own existing prompt
+   * scaffolding inside `runTurn` so both turns are wrapped identically.
+   */
   initialText: string;
   runTurn: (text: string, onTurnUsage: OnUsage) => Promise<AgentResult>;
 }
 
 /**
  * Runs one turn and, if it completed without a final message, runs exactly one
- * bare continuation turn in the same session. Usage reported to `onUsage` stays
- * cumulative across both turns; any other failure propagates untouched.
+ * bare continuation turn. Usage reported to `onUsage` stays cumulative across
+ * both turns; any other failure propagates untouched.
  */
 export async function runTurnWithEmptyResponseRetry({
   logEvent,
@@ -76,6 +90,9 @@ export async function runTurnWithEmptyResponseRetry({
     if (!(error instanceof EmptyAgentResponseError) || !error.turnCompleted) {
       throw error;
     }
+
+    firstTurnUsage = error.usage;
+    onUsage?.({ ...firstTurnUsage });
 
     appendDebugLog(logEvent, {
       ...logFields,
