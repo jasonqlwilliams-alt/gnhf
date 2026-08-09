@@ -902,6 +902,9 @@ program
             }));
           if (sleepPrevention.type === "reexeced") {
             reexeced = true;
+            // The re-execed child now owns the worktree lifecycle. Do not let
+            // this wrapper process remove it from its exit handler.
+            worktreeCleanup = null;
             process.exit(sleepPrevention.exitCode);
           }
           if (sleepPrevention.type === "active") {
