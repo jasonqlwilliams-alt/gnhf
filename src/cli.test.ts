@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { CONVENTIONAL_COMMIT_MESSAGE } from "./core/commit-message.js";
 import type { Config } from "./core/config.js";
@@ -80,6 +80,7 @@ interface CliMockOverrides {
     close: ReturnType<typeof vi.fn>;
   };
   stdinIsTTY?: boolean;
+  consoleErrorSink?: unknown[][];
 }
 
 async function runCliWithMocks(
@@ -91,7 +92,11 @@ async function runCliWithMocks(
   const stdoutWrite = vi
     .spyOn(process.stdout, "write")
     .mockImplementation(() => true);
-  const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  const consoleError = vi
+    .spyOn(console, "error")
+    .mockImplementation((...args: unknown[]) => {
+      overrides.consoleErrorSink?.push(args);
+    });
   const exitSpy = vi.spyOn(process, "exit").mockImplementation(((
     code?: string | number | null,
   ) => {
@@ -3214,9 +3219,11 @@ describe("cli", () => {
     expect(removeWorktree).not.toHaveBeenCalled();
   });
 
-  it("does not remove a worktree with commits when exit handler fires before preservation block", async () => {
+  it("preserves and reports a worktree with commits when exit handler fires before preservation block", async () => {
     vi.useFakeTimers();
     const removeWorktree = vi.fn();
+    const createWorktree = vi.fn();
+    const consoleErrorSink: unknown[][] = [];
     const exitHandlers: (() => void)[] = [];
     const processOnSpy = vi.spyOn(process, "on");
     processOnSpy.mockImplementation(((event: string, handler: () => void) => {
@@ -3239,6 +3246,8 @@ describe("cli", () => {
         },
         {
           removeWorktree,
+          createWorktree,
+          consoleErrorSink,
           orchestratorStart: vi.fn(() => new Promise<void>(() => {})),
           orchestratorGetState: vi.fn(() => ({
             status: "completed" as const,
@@ -3274,6 +3283,20 @@ describe("cli", () => {
       }
 
       expect(removeWorktree).not.toHaveBeenCalled();
+
+      const createdWorktreePath = createWorktree.mock.calls[0]?.[1] as string;
+      expect(isAbsolute(createdWorktreePath)).toBe(true);
+      const timeoutOutput = consoleErrorSink.map((call) => call.join(" "));
+      expect(
+        timeoutOutput.some((line) => line.includes("shutdown timed out")),
+      ).toBe(true);
+      expect(
+        timeoutOutput.some(
+          (line) =>
+            line.includes("worktree preserved at") &&
+            line.includes(createdWorktreePath),
+        ),
+      ).toBe(true);
     } finally {
       processOnSpy.mockRestore();
       vi.useRealTimers();

@@ -698,6 +698,19 @@ program
       let getOrchestratorState:
         | (() => ReturnType<Orchestrator["getState"]>)
         | null = null;
+      const shouldPreserveWorktree = (): boolean => {
+        try {
+          const state = getOrchestratorState?.();
+          if (!state) return false;
+          return (
+            state.commitCount > 0 || state.hasPendingCommitFailure === true
+          );
+        } catch {
+          // Orchestrator not yet created or already torn down - safe to
+          // clean up since no iteration could have committed anything.
+          return false;
+        }
+      };
 
       const currentBranch = getCurrentBranch(cwd);
       const onGnhfBranch = currentBranch.startsWith("gnhf/");
@@ -774,18 +787,7 @@ program
           const exitCleanup = worktreeCleanup;
           process.on("exit", () => {
             if (worktreeCleanup !== exitCleanup) return;
-            try {
-              const state = getOrchestratorState?.();
-              if (
-                state &&
-                (state.commitCount > 0 || state.hasPendingCommitFailure)
-              ) {
-                return;
-              }
-            } catch {
-              // Orchestrator not yet created or already torn down - safe to
-              // clean up since no iteration could have committed anything.
-            }
+            if (shouldPreserveWorktree()) return;
             exitCleanup();
           });
         }
@@ -1083,6 +1085,9 @@ program
           console.error(
             `\n  gnhf: shutdown timed out after ${FORCE_EXIT_TIMEOUT_MS / 1000}s, forcing exit\n`,
           );
+          if (worktreePath && shouldPreserveWorktree()) {
+            console.error(`  gnhf: worktree preserved at ${worktreePath}\n`);
+          }
           process.exit(getSignalExitCode(shutdownSignal ?? "SIGINT"));
         }
       } finally {
