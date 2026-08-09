@@ -533,10 +533,26 @@ describe("gnhf e2e", () => {
       tempDirs.push(worktreeParent);
       const fakeBinDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-bin-"));
       tempDirs.push(fakeBinDir);
+      // Records the pid it hands to gnhf, then execs so that pid IS the
+      // re-execed gnhf process. Comparing it against the pid stamped on the
+      // run log's run:start event proves the re-exec actually happened
+      // instead of the whole run staying in one process.
+      const markerPath = join(logDir, "inhibitor-invocations");
       const inhibitorPath = join(fakeBinDir, "systemd-inhibit");
       writeFileSync(
         inhibitorPath,
-        '#!/usr/bin/env bash\nwhile [[ "$1" == --* ]]; do shift; done\nexec "$@"\n',
+        [
+          "#!/usr/bin/env sh",
+          `echo "$$" >> "${markerPath}"`,
+          "while [ $# -gt 0 ]; do",
+          '  case "$1" in',
+          "    --*) shift ;;",
+          "    *) break ;;",
+          "  esac",
+          "done",
+          'exec "$@"',
+          "",
+        ].join("\n"),
         "utf-8",
       );
       chmodSync(inhibitorPath, 0o755);
@@ -562,9 +578,33 @@ describe("gnhf e2e", () => {
       const worktreeDirs = readdirSync(worktreeParent);
       expect(worktreeDirs).toHaveLength(1);
       const runId = worktreeDirs[0]!;
-      const runDir = join(worktreeParent, runId, ".gnhf", "runs", runId);
+      const worktreePath = join(worktreeParent, runId);
+      const runDir = join(worktreePath, ".gnhf", "runs", runId);
+      const logFilePath = join(runDir, "gnhf.log");
       expect(existsSync(join(runDir, "notes.md"))).toBe(true);
-      expect(existsSync(join(runDir, "gnhf.log"))).toBe(true);
+      expect(existsSync(logFilePath)).toBe(true);
+
+      // The inhibitor ran exactly once (the child must not re-exec again),
+      // and the run that produced this worktree ran inside that exec.
+      expect(existsSync(markerPath)).toBe(true);
+      const inhibitedPids = readFileSync(markerPath, "utf-8")
+        .split("\n")
+        .filter(Boolean);
+      expect(inhibitedPids).toHaveLength(1);
+      const startEvents = readJsonLines(logFilePath).filter(
+        (entry) => entry.event === "run:start",
+      );
+      expect(startEvents).toHaveLength(1);
+      expect(String(startEvents[0]!.pid)).toBe(inhibitedPids[0]);
+
+      // The committed work itself survived, not just the run metadata.
+      expect(git(["rev-parse", "--abbrev-ref", "HEAD"], worktreePath)).toMatch(
+        /^gnhf\//,
+      );
+      expect(git(["rev-list", "--count", "HEAD"], worktreePath)).toBe("2");
+      expect(git(["log", "-1", "--format=%s"], worktreePath)).toContain(
+        "gnhf 1:",
+      );
     },
     30_000,
   );
