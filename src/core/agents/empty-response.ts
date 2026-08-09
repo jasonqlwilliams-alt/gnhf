@@ -31,15 +31,6 @@ export class EmptyAgentResponseError extends Error {
   }
 }
 
-export function emptyTokenUsage(): TokenUsage {
-  return {
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadTokens: 0,
-    cacheCreationTokens: 0,
-  };
-}
-
 export function addTokenUsage(left: TokenUsage, right: TokenUsage): TokenUsage {
   const total: TokenUsage = {
     inputTokens: left.inputTokens + right.inputTokens,
@@ -79,19 +70,14 @@ export async function runTurnWithEmptyResponseRetry({
   initialText,
   runTurn,
 }: EmptyResponseRetryOptions): Promise<AgentResult> {
-  let firstTurnUsage = emptyTokenUsage();
-
   try {
-    return await runTurn(initialText, (usage) => {
-      firstTurnUsage = { ...usage };
-      onUsage?.(usage);
-    });
+    return await runTurn(initialText, (usage) => onUsage?.(usage));
   } catch (error) {
     if (!(error instanceof EmptyAgentResponseError) || !error.turnCompleted) {
       throw error;
     }
 
-    firstTurnUsage = error.usage;
+    const firstTurnUsage = error.usage;
     onUsage?.({ ...firstTurnUsage });
 
     appendDebugLog(logEvent, {

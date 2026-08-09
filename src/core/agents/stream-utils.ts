@@ -1,15 +1,76 @@
 import type { ChildProcess } from "node:child_process";
 import type { Readable } from "node:stream";
-import type { WriteStream } from "node:fs";
+import { createWriteStream } from "node:fs";
+import { appendDebugLog, serializeError } from "../debug-log.js";
+
+/** Sink for raw agent stdout. */
+export interface AgentLogSink {
+  write(chunk: string | Buffer): void;
+}
+
+/**
+ * Per-run log file for adapters that spawn a CLI once per turn.
+ *
+ * An agent run can span more than one spawn (an empty-response continuation
+ * reuses the same log file), and a turn can be rejected - by an abort, say -
+ * while its child is still streaming stdout. Ending the file on either event
+ * alone would truncate a later turn or write after end, so the file is closed
+ * only once the run has finished *and* every child it spawned has exited.
+ */
+export class AgentLogFile implements AgentLogSink {
+  private readonly stream: ReturnType<typeof createWriteStream> | null;
+  private openChildren = 0;
+  private runFinished = false;
+  private ended = false;
+
+  constructor(logPath?: string) {
+    this.stream = logPath ? createWriteStream(logPath) : null;
+    // Log writes are best effort; a failed write must not take down the run.
+    this.stream?.on("error", (error) => {
+      appendDebugLog("agent:log:write-failed", {
+        error: serializeError(error),
+      });
+    });
+  }
+
+  write(chunk: string | Buffer): void {
+    if (this.ended) return;
+    this.stream?.write(chunk);
+  }
+
+  /** Keep the file open until `child` has exited. */
+  track(child: ChildProcess): void {
+    this.openChildren += 1;
+    let settled = false;
+    const onChildGone = () => {
+      if (settled) return;
+      settled = true;
+      this.openChildren -= 1;
+      this.endIfIdle();
+    };
+    child.on("close", onChildGone);
+    child.on("error", onChildGone);
+  }
+
+  /** The run is done; close as soon as no tracked child is still running. */
+  finish(): void {
+    this.runFinished = true;
+    this.endIfIdle();
+  }
+
+  private endIfIdle(): void {
+    if (this.ended || !this.runFinished || this.openChildren > 0) return;
+    this.ended = true;
+    this.stream?.end();
+  }
+}
 
 /**
  * Wire stderr collection, spawn-error handling, and non-zero exit rejection
  * for a child process. Calls `onSuccess` only when the process exits with
  * code 0.
  *
- * The log stream is deliberately not owned here: an agent run can span more
- * than one spawn (an empty-response continuation reuses the same log file),
- * so the caller closes it once the whole run is done.
+ * The log file is deliberately not owned here - see `AgentLogFile`.
  */
 export function setupChildProcessHandlers(
   child: ChildProcess,
@@ -42,7 +103,7 @@ export function setupChildProcessHandlers(
  */
 export function parseJSONLStream<T>(
   stream: Readable,
-  logStream: WriteStream | null,
+  logStream: AgentLogSink | null,
   callback: (event: T) => void,
 ): void {
   let buffer = "";

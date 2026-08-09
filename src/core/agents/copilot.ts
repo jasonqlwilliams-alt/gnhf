@@ -1,5 +1,4 @@
 import { execFileSync, spawn } from "node:child_process";
-import { createWriteStream, type WriteStream } from "node:fs";
 import {
   buildAgentOutputSchema,
   parseAgentOutput,
@@ -17,6 +16,7 @@ import {
   runTurnWithEmptyResponseRetry,
 } from "./empty-response.js";
 import {
+  AgentLogFile,
   parseJSONLStream,
   setupAbortHandler,
   setupChildProcessHandlers,
@@ -151,6 +151,29 @@ function buildCopilotArgs(
   ];
 }
 
+// `--continue` resumes the most recently closed local session, so the
+// continuation turn still sees the first turn's reasoning, tool calls, and
+// the output contract it was already given - the nudge itself stays bare.
+function buildCopilotContinueArgs(
+  prompt: string,
+  extraArgs?: string[],
+): string[] {
+  const userArgs = extraArgs ?? [];
+
+  return [
+    ...userArgs,
+    "--continue",
+    "-p",
+    prompt,
+    "--output-format",
+    "json",
+    "--stream",
+    "off",
+    "--no-color",
+    ...(userSpecifiedPermissionMode(userArgs) ? [] : ["--allow-all"]),
+  ];
+}
+
 function numberField(
   usage: Record<string, unknown>,
   names: string[],
@@ -220,26 +243,28 @@ export class CopilotAgent implements Agent {
     options?: AgentRunOptions,
   ): Promise<AgentResult> {
     const { onUsage, onMessage, signal, logPath } = options ?? {};
-    const logStream = logPath ? createWriteStream(logPath) : null;
+    const logFile = new AgentLogFile(logPath);
+    let turnsStarted = 0;
 
     try {
-      // Copilot carries its output contract in the prompt text, so the bare
-      // nudge goes through the same buildCopilotPrompt scaffolding the first
-      // turn used - no continuation-specific schema machinery.
       return await runTurnWithEmptyResponseRetry({
         logEvent: "copilot:output:continuation",
         onUsage,
         initialText: prompt,
-        runTurn: (text, onTurnUsage) =>
-          this.runTurn(text, cwd, {
+        runTurn: (text, onTurnUsage) => {
+          const continuation = turnsStarted > 0;
+          turnsStarted += 1;
+          return this.runTurn(text, cwd, {
             onUsage: onTurnUsage,
             onMessage,
             signal,
-            logStream,
-          }),
+            logFile,
+            continuation,
+          });
+        },
       });
     } finally {
-      logStream?.end();
+      logFile.finish();
     }
   }
 
@@ -250,15 +275,18 @@ export class CopilotAgent implements Agent {
       onUsage?: OnUsage;
       onMessage?: OnMessage;
       signal?: AbortSignal;
-      logStream: WriteStream | null;
+      logFile: AgentLogFile;
+      continuation: boolean;
     },
   ): Promise<AgentResult> {
-    const { onUsage, onMessage, signal, logStream } = options;
+    const { onUsage, onMessage, signal, logFile, continuation } = options;
 
     return new Promise((resolve, reject) => {
       const child = spawn(
         this.bin,
-        buildCopilotArgs(prompt, this.schema, this.extraArgs),
+        continuation
+          ? buildCopilotContinueArgs(prompt, this.extraArgs)
+          : buildCopilotArgs(prompt, this.schema, this.extraArgs),
         {
           cwd,
           shell: shouldUseWindowsShell(this.bin, this.platform),
@@ -266,6 +294,7 @@ export class CopilotAgent implements Agent {
           env: process.env,
         },
       );
+      logFile.track(child);
 
       if (
         setupAbortHandler(signal, child, reject, () =>
@@ -283,7 +312,7 @@ export class CopilotAgent implements Agent {
         cacheCreationTokens: 0,
       };
 
-      parseJSONLStream<CopilotEvent>(child.stdout!, logStream, (event) => {
+      parseJSONLStream<CopilotEvent>(child.stdout!, logFile, (event) => {
         if (event.type === "assistant.message") {
           const data = (event as CopilotAssistantMessageEvent).data;
           if (typeof data.content === "string") {

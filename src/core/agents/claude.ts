@@ -1,5 +1,4 @@
 import { execFileSync, spawn } from "node:child_process";
-import { createWriteStream, type WriteStream } from "node:fs";
 import {
   buildAgentOutputSchema,
   type Agent,
@@ -18,7 +17,11 @@ import {
   runTurnWithEmptyResponseRetry,
 } from "./empty-response.js";
 import { shutdownChildProcess } from "./managed-process.js";
-import { parseJSONLStream, setupAbortHandler } from "./stream-utils.js";
+import {
+  AgentLogFile,
+  parseJSONLStream,
+  setupAbortHandler,
+} from "./stream-utils.js";
 
 const DEFAULT_FINAL_RESULT_EXIT_GRACE_MS = 15_000;
 /** Upper bound on the stdout tail kept for non-zero-exit error reporting. */
@@ -345,7 +348,7 @@ export class ClaudeAgent implements Agent {
     options?: AgentRunOptions,
   ): Promise<AgentResult> {
     const { onUsage, onMessage, signal, logPath } = options ?? {};
-    const logStream = logPath ? createWriteStream(logPath) : null;
+    const logFile = new AgentLogFile(logPath);
     // Populated from the first turn's stream so a continuation resumes that
     // exact conversation and still sees its own reasoning and tool calls.
     let sessionId: string | null = null;
@@ -362,7 +365,7 @@ export class ClaudeAgent implements Agent {
             onUsage: onTurnUsage,
             onMessage,
             signal,
-            logStream,
+            logFile,
             resumeSessionId: sessionId,
             onSessionId: (id) => {
               sessionId = id;
@@ -370,7 +373,7 @@ export class ClaudeAgent implements Agent {
           }),
       });
     } finally {
-      logStream?.end();
+      logFile.finish();
     }
   }
 
@@ -381,12 +384,12 @@ export class ClaudeAgent implements Agent {
       onUsage?: OnUsage;
       onMessage?: OnMessage;
       signal?: AbortSignal;
-      logStream: WriteStream | null;
+      logFile: AgentLogFile;
       resumeSessionId: string | null;
       onSessionId: (sessionId: string) => void;
     },
   ): Promise<AgentResult> {
-    const { onUsage, onMessage, signal, logStream } = options;
+    const { onUsage, onMessage, signal, logFile } = options;
     const { resumeSessionId, onSessionId } = options;
 
     return new Promise((resolve, reject) => {
@@ -401,6 +404,7 @@ export class ClaudeAgent implements Agent {
           env: process.env,
         },
       );
+      logFile.track(child);
 
       if (
         setupAbortHandler(signal, child, reject, () =>
@@ -441,7 +445,7 @@ export class ClaudeAgent implements Agent {
         reject(new Error(`Failed to spawn claude: ${err.message}`));
       });
 
-      parseJSONLStream<ClaudeEvent>(child.stdout!, logStream, (event) => {
+      parseJSONLStream<ClaudeEvent>(child.stdout!, logFile, (event) => {
         const eventSessionId = (event as { session_id?: unknown }).session_id;
         if (typeof eventSessionId === "string" && eventSessionId) {
           onSessionId(eventSessionId);

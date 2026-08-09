@@ -272,7 +272,7 @@ describe("CopilotAgent", () => {
     expect(args[1]).toContain("should_fully_stop");
   });
 
-  it("re-asks once with the bare nudge inside the usual output contract when the turn had no assistant message", async () => {
+  it("continues the previous session once with the bare nudge when the turn had no assistant message", async () => {
     const first = createMockProcess();
     const second = createMockProcess();
     mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
@@ -305,11 +305,17 @@ describe("CopilotAgent", () => {
       usage: { outputTokens: 8 },
     });
 
-    const continuationPrompt = (mockSpawn.mock.calls[1]![1] as string[])[1]!;
-    expect(continuationPrompt).toContain(
+    expect(mockSpawn.mock.calls[1]![1]).toEqual([
+      "--continue",
+      "-p",
       "You did not produce a final answer. Continue and provide your final summary now.",
-    );
-    expect(continuationPrompt).toContain("gnhf final output contract");
+      "--output-format",
+      "json",
+      "--stream",
+      "off",
+      "--no-color",
+      "--allow-all",
+    ]);
     expect(mockAppendDebugLog).toHaveBeenCalledWith(
       "copilot:output:continuation",
       expect.objectContaining({ attempt: 1 }),

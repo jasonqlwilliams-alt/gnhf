@@ -1,5 +1,4 @@
 import { execFileSync, spawn } from "node:child_process";
-import { createWriteStream, type WriteStream } from "node:fs";
 import {
   buildAgentOutputSchema,
   parseAgentOutput,
@@ -14,14 +13,19 @@ import {
 } from "./types.js";
 import { appendDebugLog } from "../debug-log.js";
 import {
-  EmptyAgentResponseError,
-  runTurnWithEmptyResponseRetry,
-} from "./empty-response.js";
-import {
+  AgentLogFile,
   parseJSONLStream,
   setupAbortHandler,
   setupChildProcessHandlers,
 } from "./stream-utils.js";
+
+// gnhf runs pi with `--no-session`, so a turn leaves nothing behind to
+// continue. A second spawn would be a fresh agent with no knowledge of the
+// task, the workspace edits, or the notes - it could only invent a final
+// summary - so pi is deliberately excluded from empty-response recovery and
+// reports the reason instead.
+const PI_EMPTY_RESPONSE_MESSAGE =
+  "pi returned no text output (gnhf runs pi with --no-session, so there is no session to continue and the empty response cannot be recovered)";
 
 interface PiAgentDeps {
   bin?: string;
@@ -226,26 +230,17 @@ export class PiAgent implements Agent {
     options?: AgentRunOptions,
   ): Promise<AgentResult> {
     const { onUsage, onMessage, signal, logPath } = options ?? {};
-    const logStream = logPath ? createWriteStream(logPath) : null;
+    const logFile = new AgentLogFile(logPath);
 
     try {
-      // Pi runs ephemerally (`--no-session`) and carries its output contract
-      // in the prompt, so the bare nudge is delivered through the same
-      // buildPiPrompt scaffolding rather than new schema machinery.
-      return await runTurnWithEmptyResponseRetry({
-        logEvent: "pi:output:continuation",
+      return await this.runTurn(prompt, cwd, {
         onUsage,
-        initialText: prompt,
-        runTurn: (text, onTurnUsage) =>
-          this.runTurn(text, cwd, {
-            onUsage: onTurnUsage,
-            onMessage,
-            signal,
-            logStream,
-          }),
+        onMessage,
+        signal,
+        logFile,
       });
     } finally {
-      logStream?.end();
+      logFile.finish();
     }
   }
 
@@ -256,10 +251,10 @@ export class PiAgent implements Agent {
       onUsage?: OnUsage;
       onMessage?: OnMessage;
       signal?: AbortSignal;
-      logStream: WriteStream | null;
+      logFile: AgentLogFile;
     },
   ): Promise<AgentResult> {
-    const { onUsage, onMessage, signal, logStream } = options;
+    const { onUsage, onMessage, signal, logFile } = options;
 
     return new Promise((resolve, reject) => {
       const child = spawn(this.bin, buildPiArgs(this.extraArgs), {
@@ -269,6 +264,7 @@ export class PiAgent implements Agent {
         stdio: ["pipe", "pipe", "pipe"],
         env: process.env,
       });
+      logFile.track(child);
 
       child.stdin?.write(buildPiPrompt(prompt, this.schema));
       child.stdin?.end();
@@ -339,7 +335,7 @@ export class PiAgent implements Agent {
         updateUsage(message, streaming);
       };
 
-      parseJSONLStream<JsonRecord>(child.stdout!, logStream, (event) => {
+      parseJSONLStream<JsonRecord>(child.stdout!, logFile, (event) => {
         if (!isRecord(event)) return;
 
         if (event.type === "message_update") {
@@ -419,15 +415,11 @@ export class PiAgent implements Agent {
           textByIndexToString(streamTextByIndex).trim();
 
         if (!finalText) {
-          appendDebugLog("pi:output:missing", {});
-          reject(
-            new EmptyAgentResponseError("pi returned no text output", {
-              // pi's error and aborted stop reasons are already rejected
-              // above, so reaching here means the turn ended normally.
-              turnCompleted: true,
-              usage: lastEmittedUsage,
-            }),
-          );
+          appendDebugLog("pi:output:missing", {
+            recoverable: false,
+            reason: "pi runs with --no-session",
+          });
+          reject(new Error(PI_EMPTY_RESPONSE_MESSAGE));
           return;
         }
 

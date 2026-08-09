@@ -126,6 +126,7 @@ function isReservedAgentArg(agent: AgentName, arg: string): boolean {
     case "codex":
       return (
         arg === "exec" ||
+        arg === "resume" ||
         arg === "--json" ||
         arg === "--output-schema" ||
         arg.startsWith("--output-schema=") ||
@@ -164,7 +165,10 @@ function isReservedAgentArg(agent: AgentName, arg: string): boolean {
         arg === "--no-color" ||
         arg === "--share" ||
         arg.startsWith("--share=") ||
-        arg === "--share-gist"
+        arg === "--share-gist" ||
+        arg === "--continue" ||
+        arg === "--resume" ||
+        arg.startsWith("--resume=")
       );
     case "pi":
       return (

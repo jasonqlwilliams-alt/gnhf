@@ -33,6 +33,10 @@ function emitJson(proc: ReturnType<typeof createMockProcess>, event: unknown) {
   proc.stdout.emit("data", Buffer.from(`${JSON.stringify(event)}\n`));
 }
 
+function threadStarted(threadId: string) {
+  return { type: "thread.started", thread_id: threadId };
+}
+
 function agentMessage(text: string) {
   return {
     type: "item.completed",
@@ -241,13 +245,14 @@ describe("CodexAgent", () => {
     expect(proc.kill).not.toHaveBeenCalled();
   });
 
-  it("re-asks once with the bare nudge when a completed turn had no agent message", async () => {
+  it("resumes the recorded thread once with the bare nudge when a completed turn had no agent message", async () => {
     const first = createMockProcess();
     const second = createMockProcess();
     mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
     const agent = new CodexAgent("/tmp/schema.json");
 
     const promise = agent.run("test prompt", "/work/dir");
+    emitJson(first, threadStarted("thread-abc"));
     emitJson(first, turnCompleted(10, 5));
     first.emit("close", 0);
 
@@ -261,11 +266,16 @@ describe("CodexAgent", () => {
       usage: { inputTokens: 13, outputTokens: 7 },
     });
 
-    const continuationArgs = mockSpawn.mock.calls[1]![1] as string[];
-    expect(continuationArgs).toContain(
+    expect(mockSpawn.mock.calls[1]![1]).toEqual([
+      "exec",
+      "resume",
+      "thread-abc",
       "You did not produce a final answer. Continue and provide your final summary now.",
-    );
-    expect(continuationArgs).toContain("--output-schema");
+      "--json",
+      "--output-schema",
+      "/tmp/schema.json",
+      "--dangerously-bypass-approvals-and-sandbox",
+    ]);
     expect(mockAppendDebugLog).toHaveBeenCalledWith(
       "codex:output:continuation",
       expect.objectContaining({ attempt: 1 }),
@@ -278,6 +288,7 @@ describe("CodexAgent", () => {
     const agent = new CodexAgent("/tmp/schema.json");
 
     const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, threadStarted("thread-abc"));
     proc.emit("close", 0);
 
     await expect(promise).rejects.toThrow("codex returned no agent message");
@@ -288,6 +299,70 @@ describe("CodexAgent", () => {
     );
   });
 
+  it("does not re-ask when codex reported no thread id to resume", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new CodexAgent("/tmp/schema.json");
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, turnCompleted(10, 5));
+    proc.emit("close", 0);
+
+    await expect(promise).rejects.toThrow(/no thread id/);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not re-ask when configured codex args are unsupported by resume", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new CodexAgent("/tmp/schema.json", {
+      extraArgs: ["--full-auto"],
+    });
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, threadStarted("thread-abc"));
+    emitJson(proc, turnCompleted(10, 5));
+    proc.emit("close", 0);
+
+    await expect(promise).rejects.toThrow(/--full-auto.*codex exec resume/);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+  });
+
+  it("forwards resume-compatible user args to the continuation", async () => {
+    const first = createMockProcess();
+    const second = createMockProcess();
+    mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const agent = new CodexAgent("/tmp/schema.json", {
+      extraArgs: ["--model", "gpt-5.5"],
+    });
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(first, threadStarted("thread-abc"));
+    emitJson(first, turnCompleted(1, 1));
+    first.emit("close", 0);
+
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(2));
+    emitJson(second, agentMessage(FINAL_OUTPUT));
+    emitJson(second, turnCompleted(1, 1));
+    second.emit("close", 0);
+
+    await expect(promise).resolves.toMatchObject({
+      output: { summary: "recovered" },
+    });
+    expect(mockSpawn.mock.calls[1]![1]).toEqual([
+      "exec",
+      "resume",
+      "--model",
+      "gpt-5.5",
+      "thread-abc",
+      "You did not produce a final answer. Continue and provide your final summary now.",
+      "--json",
+      "--output-schema",
+      "/tmp/schema.json",
+      "--dangerously-bypass-approvals-and-sandbox",
+    ]);
+  });
+
   it("fails after exactly one re-ask when the continuation is also empty", async () => {
     const first = createMockProcess();
     const second = createMockProcess();
@@ -295,6 +370,7 @@ describe("CodexAgent", () => {
     const agent = new CodexAgent("/tmp/schema.json");
 
     const promise = agent.run("test prompt", "/work/dir");
+    emitJson(first, threadStarted("thread-abc"));
     emitJson(first, turnCompleted(10, 5));
     first.emit("close", 0);
 
