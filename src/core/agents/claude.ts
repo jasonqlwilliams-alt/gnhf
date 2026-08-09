@@ -16,6 +16,12 @@ import { parseJSONLStream, setupAbortHandler } from "./stream-utils.js";
 const DEFAULT_FINAL_RESULT_EXIT_GRACE_MS = 15_000;
 /** Upper bound on the stdout tail kept for non-zero-exit error reporting. */
 const MAX_EXIT_OUTPUT_CHARS = 4_000;
+/**
+ * Tighter bound on unstructured stdout quoted back in the failure detail: that
+ * text lands in notes.md and is replayed in every later iteration prompt.
+ */
+const MAX_RAW_TAIL_CHARS = 400;
+const RAW_TAIL_ELISION = "[...truncated, full output in the iteration log] ";
 
 interface ClaudeAssistantEvent {
   type: "assistant";
@@ -227,12 +233,27 @@ function errorTextFromEvent(event: unknown): string | null {
   return null;
 }
 
+/** Quote only the end of unstructured output, marking what was dropped. */
+function elideRawTail(raw: string): string {
+  return raw.length > MAX_RAW_TAIL_CHARS
+    ? `${RAW_TAIL_ELISION}${raw.slice(raw.length - MAX_RAW_TAIL_CHARS)}`
+    : raw;
+}
+
+interface StdoutFailure {
+  /** Error text the CLI itself authored in structured stdout events. */
+  structured: string;
+  /** Text worth reporting: the structured text, or a short raw tail. */
+  reported: string;
+}
+
 /**
  * Pull the CLI's own error text out of its stdout, which is JSONL when the run
- * got far enough to stream events and plain text otherwise. Falls back to the
- * raw tail so the reported detail is never empty when stdout had content.
+ * got far enough to stream events and plain text otherwise. Falls back to a
+ * bounded raw tail so the reported detail is never empty when stdout had
+ * content.
  */
-function extractStdoutError(stdoutTail: string): string {
+function extractStdoutError(stdoutTail: string): StdoutFailure {
   const messages: string[] = [];
   for (const line of stdoutTail.split("\n")) {
     if (!line.trim()) continue;
@@ -243,20 +264,41 @@ function extractStdoutError(stdoutTail: string): string {
       // Not JSON: covered by the raw-tail fallback below.
     }
   }
-  return messages.length > 0 ? messages.join("\n") : stdoutTail.trim();
+  const structured = messages.join("\n");
+  return {
+    structured,
+    reported: structured || elideRawTail(stdoutTail.trim()),
+  };
 }
 
-function formatExitFailure(
+interface ExitFailure {
+  detail: string;
+  permanent: boolean;
+}
+
+/**
+ * Describe a non-zero exit. `detail` reports everything both streams offered,
+ * while `permanent` is decided only from text the CLI itself authored - stderr
+ * and structured stdout error fields - so agent output that merely quotes a
+ * permanent-failure phrase cannot abort an otherwise retryable run.
+ */
+function describeExitFailure(
   code: number | null,
   stdoutTail: string,
   stderr: string,
-): string {
-  const segments = [stderr.trim(), extractStdoutError(stdoutTail)].filter(
-    Boolean,
-  );
-  return segments.length > 0
-    ? `claude exited with code ${code}: ${segments.join("\n")}`
-    : `claude exited with code ${code} and produced no output`;
+): ExitFailure {
+  const trimmedStderr = stderr.trim();
+  const stdoutError = extractStdoutError(stdoutTail);
+  const segments = [trimmedStderr, stdoutError.reported].filter(Boolean);
+  return {
+    detail:
+      segments.length > 0
+        ? `claude exited with code ${code}: ${segments.join("\n")}`
+        : `claude exited with code ${code} and produced no output`,
+    permanent: isPermanentClaudeError(
+      [trimmedStderr, stdoutError.structured].filter(Boolean).join("\n"),
+    ),
+  };
 }
 
 export class ClaudeAgent implements Agent {
@@ -459,14 +501,14 @@ export class ClaudeAgent implements Agent {
         }
         logStream?.end();
         if (code !== 0 && !closedAfterFinalCleanup) {
-          const detail = formatExitFailure(code, stdoutTail, stderr);
+          const failure = describeExitFailure(code, stdoutTail, stderr);
           reject(
-            isPermanentClaudeError(detail)
+            failure.permanent
               ? new PermanentAgentError(
                   "claude credit balance too low - see gnhf.log",
-                  detail,
+                  failure.detail,
                 )
-              : new Error(detail),
+              : new Error(failure.detail),
           );
           return;
         }

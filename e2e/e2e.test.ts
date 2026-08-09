@@ -383,8 +383,7 @@ describe("gnhf e2e", () => {
     );
     expect(agentRunErrorEntry).toBeDefined();
     const agentError = agentRunErrorEntry?.error as
-      | { message?: string }
-      | undefined;
+      { message?: string } | undefined;
     expect(agentError?.message).toContain("OpenCode provider overloaded");
     expect(agentError?.message).not.toContain(
       "Failed to parse opencode output",
@@ -398,6 +397,67 @@ describe("gnhf e2e", () => {
     );
     expect(iterationEnd?.success).toBe(false);
   }, 30_000);
+
+  it.each([
+    {
+      label: "carried on stdout",
+      mode: "stdout-error",
+      expected:
+        "claude exited with code 1: Invalid model name: claude-nonexistent-5",
+    },
+    {
+      label: "with both streams empty",
+      mode: "no-output",
+      expected: "claude exited with code 1 and produced no output",
+    },
+  ])(
+    "surfaces the claude CLI's own failure text $label",
+    async ({ mode, expected }) => {
+      const cwd = createRepo();
+      tempDirs.push(cwd);
+      const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+      tempDirs.push(logDir);
+      const mockLogPath = join(logDir, "mock-opencode.jsonl");
+
+      const result = await runCli(
+        cwd,
+        [
+          "break the build",
+          "--agent",
+          "claude",
+          "--max-iterations",
+          "1",
+          "--prevent-sleep",
+          "off",
+        ],
+        {
+          env: {
+            ...createTestEnv(mockLogPath, tempDirs),
+            GNHF_MOCK_CLAUDE_MODE: mode,
+          },
+        },
+      );
+
+      expect(result.code).toBe(0);
+
+      const debugLogPath = findRunLogPath(cwd);
+      const agentRunErrorEntry = readJsonLines(debugLogPath).find(
+        (entry) => entry.event === "agent:run:error",
+      );
+      expect(agentRunErrorEntry).toBeDefined();
+      const agentError = agentRunErrorEntry?.error as
+        { message?: string } | undefined;
+      expect(agentError?.message).toBe(expected);
+
+      // The morning-after trace: notes.md is what the user actually reads.
+      const notes = readFileSync(
+        join(dirname(debugLogPath), "notes.md"),
+        "utf-8",
+      );
+      expect(notes).toContain(`[ERROR] ${expected}`);
+    },
+    30_000,
+  );
 
   it("reads the objective from stdin", async () => {
     const cwd = createRepo();
