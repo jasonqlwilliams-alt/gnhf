@@ -142,6 +142,34 @@ interface OpenCodeDeps {
   spawn?: typeof spawn;
 }
 
+const EMPTY_RESPONSE_CONTINUATION_PROMPT =
+  "You did not produce a final answer. Continue and provide your final summary now.";
+
+class OpenCodeEmptyResponseError extends Error {
+  constructor() {
+    super("OpenCode produced no final answer");
+    this.name = "OpenCodeEmptyResponseError";
+  }
+}
+
+function addTokenUsage(left: TokenUsage, right: TokenUsage): TokenUsage {
+  return {
+    inputTokens: left.inputTokens + right.inputTokens,
+    outputTokens: left.outputTokens + right.outputTokens,
+    cacheReadTokens: left.cacheReadTokens + right.cacheReadTokens,
+    cacheCreationTokens: left.cacheCreationTokens + right.cacheCreationTokens,
+  };
+}
+
+function emptyTokenUsage(): TokenUsage {
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+  };
+}
+
 interface OpenCodeServer {
   baseUrl: string;
   child: ChildProcessWithoutNullStreams;
@@ -371,15 +399,43 @@ export class OpenCodeAgent implements Agent {
     try {
       const server = await this.ensureServer(cwd, runController.signal);
       sessionId = await this.createSession(server, cwd, runController.signal);
-      const result = await this.streamMessage(
-        server,
-        sessionId,
-        buildPrompt(prompt, this.schema),
-        runController.signal,
-        logStream,
-        onUsage,
-        onMessage,
-      );
+      let firstTurnUsage = emptyTokenUsage();
+      let result: AgentResult;
+      try {
+        result = await this.streamMessage(
+          server,
+          sessionId,
+          buildPrompt(prompt, this.schema),
+          runController.signal,
+          logStream,
+          (usage) => {
+            firstTurnUsage = usage;
+            onUsage?.(usage);
+          },
+          onMessage,
+        );
+      } catch (error) {
+        if (!(error instanceof OpenCodeEmptyResponseError)) throw error;
+
+        appendDebugLog("opencode:output:continuation", {
+          sessionId,
+          attempt: 1,
+          prompt: EMPTY_RESPONSE_CONTINUATION_PROMPT,
+        });
+        const retryResult = await this.streamMessage(
+          server,
+          sessionId,
+          EMPTY_RESPONSE_CONTINUATION_PROMPT,
+          runController.signal,
+          logStream,
+          (usage) => onUsage?.(addTokenUsage(firstTurnUsage, usage)),
+          onMessage,
+        );
+        result = {
+          output: retryResult.output,
+          usage: addTokenUsage(firstTurnUsage, retryResult.usage),
+        };
+      }
       appendDebugLog("opencode:run:end", {
         sessionId,
         elapsedMs: Date.now() - runStartedAt,
@@ -1083,7 +1139,7 @@ export class OpenCodeAgent implements Agent {
         sessionId,
         hasStructuredOutput: structuredOutputFromSSE !== null,
       });
-      throw new Error("OpenCode produced no final answer");
+      throw new OpenCodeEmptyResponseError();
     }
 
     try {
