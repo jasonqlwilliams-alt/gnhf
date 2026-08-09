@@ -14,6 +14,8 @@ import { shutdownChildProcess } from "./managed-process.js";
 import { parseJSONLStream, setupAbortHandler } from "./stream-utils.js";
 
 const DEFAULT_FINAL_RESULT_EXIT_GRACE_MS = 15_000;
+/** Upper bound on the stdout tail kept for non-zero-exit error reporting. */
+const MAX_EXIT_OUTPUT_CHARS = 4_000;
 
 interface ClaudeAssistantEvent {
   type: "assistant";
@@ -192,8 +194,69 @@ function extendsUsage(next: TokenUsage, previous: TokenUsage): boolean {
   );
 }
 
-function isPermanentClaudeError(stderr: string): boolean {
-  return /credit balance\s+is\s+too\s+low/i.test(stderr);
+function isPermanentClaudeError(output: string): boolean {
+  return /credit balance\s+is\s+too\s+low/i.test(output);
+}
+
+/** Keep only the last `MAX_EXIT_OUTPUT_CHARS` characters so long streams stay bounded. */
+function appendBoundedTail(existing: string, chunk: string): string {
+  const combined = existing + chunk;
+  return combined.length > MAX_EXIT_OUTPUT_CHARS
+    ? combined.slice(combined.length - MAX_EXIT_OUTPUT_CHARS)
+    : combined;
+}
+
+function errorTextFromEvent(event: unknown): string | null {
+  if (!event || typeof event !== "object") return null;
+  const record = event as Record<string, unknown>;
+
+  const error = record.error;
+  if (typeof error === "string" && error.trim()) return error.trim();
+  if (error && typeof error === "object") {
+    const message = (error as Record<string, unknown>).message;
+    if (typeof message === "string" && message.trim()) return message.trim();
+  }
+
+  if (record.is_error === true || record.type === "error") {
+    for (const key of ["result", "message", "subtype"]) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Pull the CLI's own error text out of its stdout, which is JSONL when the run
+ * got far enough to stream events and plain text otherwise. Falls back to the
+ * raw tail so the reported detail is never empty when stdout had content.
+ */
+function extractStdoutError(stdoutTail: string): string {
+  const messages: string[] = [];
+  for (const line of stdoutTail.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const message = errorTextFromEvent(JSON.parse(line));
+      if (message) messages.push(message);
+    } catch {
+      // Not JSON: covered by the raw-tail fallback below.
+    }
+  }
+  return messages.length > 0 ? messages.join("\n") : stdoutTail.trim();
+}
+
+function formatExitFailure(
+  code: number | null,
+  stdoutTail: string,
+  stderr: string,
+): string {
+  const segments = [stderr.trim(), extractStdoutError(stdoutTail)].filter(
+    Boolean,
+  );
+  return segments.length > 0
+    ? `claude exited with code ${code}: ${segments.join("\n")}`
+    : `claude exited with code ${code} and produced no output`;
 }
 
 export class ClaudeAgent implements Agent {
@@ -252,6 +315,7 @@ export class ClaudeAgent implements Agent {
       let finalResultCleanupTimer: ReturnType<typeof setTimeout> | null = null;
       let closedAfterFinalCleanup = false;
       let stderr = "";
+      let stdoutTail = "";
       const cumulative: TokenUsage = {
         inputTokens: 0,
         outputTokens: 0,
@@ -266,6 +330,10 @@ export class ClaudeAgent implements Agent {
 
       child.stderr!.on("data", (data: Buffer) => {
         stderr += data.toString();
+      });
+
+      child.stdout!.on("data", (data: Buffer) => {
+        stdoutTail = appendBoundedTail(stdoutTail, data.toString());
       });
 
       child.on("error", (err) => {
@@ -391,9 +459,9 @@ export class ClaudeAgent implements Agent {
         }
         logStream?.end();
         if (code !== 0 && !closedAfterFinalCleanup) {
-          const detail = `claude exited with code ${code}: ${stderr}`;
+          const detail = formatExitFailure(code, stdoutTail, stderr);
           reject(
-            isPermanentClaudeError(stderr)
+            isPermanentClaudeError(detail)
               ? new PermanentAgentError(
                   "claude credit balance too low - see gnhf.log",
                   detail,
