@@ -932,6 +932,35 @@ describe("OpenCodeAgent", () => {
     );
   });
 
+  it("does not continue when the event stream ends before session.idle", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ healthy: true, version: "1.3.13" }))
+      .mockResolvedValueOnce(jsonResponse({ id: "session-123" }))
+      .mockResolvedValueOnce(
+        sseResponse([
+          'data: {"directory":"/repo","payload":{"type":"message.updated","properties":{"sessionID":"session-123","info":{"id":"msg-empty-1","role":"assistant","tokens":{"input":1,"output":1,"cache":{"read":0,"write":0}}}}}}\n\n',
+        ]),
+      )
+      .mockResolvedValueOnce(promptAsyncResponse())
+      .mockResolvedValueOnce(jsonResponse(true));
+
+    await expect(agent.run("test", "/repo")).rejects.toThrow(
+      "OpenCode produced no final answer",
+    );
+    expect(
+      fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes("/prompt_async"),
+      ),
+    ).toHaveLength(1);
+    expect(mockAppendDebugLog).not.toHaveBeenCalledWith(
+      "opencode:output:continuation",
+      expect.anything(),
+    );
+  });
+
   it("rejects with 'OpenCode produced no final answer' after one continuation is also empty", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);

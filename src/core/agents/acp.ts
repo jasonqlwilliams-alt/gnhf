@@ -9,8 +9,13 @@ import {
   type AcpRuntimeTurnResult,
   type AcpxRuntime,
 } from "acpx/runtime";
+import type { WriteStream } from "node:fs";
 import { appendDebugLog, serializeError } from "../debug-log.js";
 import { redactAcpTargetForLogs } from "../config.js";
+import {
+  EmptyAgentResponseError,
+  runTurnWithEmptyResponseRetry,
+} from "./empty-response.js";
 import { parseAgentJson } from "./json-extract.js";
 import {
   PermanentAgentError,
@@ -19,6 +24,8 @@ import {
   type AgentOutputSchema,
   type AgentResult,
   type AgentRunOptions,
+  type OnMessage,
+  type OnUsage,
   type TokenUsage,
 } from "./types.js";
 
@@ -207,6 +214,49 @@ export class AcpAgent implements Agent {
     }
     this.handle = handle;
 
+    const logStream = logPath ? createWriteStream(logPath) : null;
+    try {
+      // The ACP session is persistent, so a continuation turn still sees the
+      // first turn's reasoning, tool calls, and the output contract that
+      // buildAcpPrompt already delivered - the nudge stays bare.
+      return await runTurnWithEmptyResponseRetry({
+        logEvent: "acp:turn:continuation",
+        logFields: {
+          target: redactAcpTargetForLogs(this.target),
+          sessionKey: this.runId,
+        },
+        onUsage,
+        initialText: buildAcpPrompt(prompt, this.schema),
+        runTurn: (text, onTurnUsage) =>
+          this.runTurn({
+            runtime,
+            handle,
+            text,
+            cwd,
+            signal,
+            onMessage,
+            onUsage: onTurnUsage,
+            logStream,
+          }),
+      });
+    } finally {
+      logStream?.end();
+    }
+  }
+
+  private async runTurn(params: {
+    runtime: AcpxRuntimeLike;
+    handle: AcpRuntimeHandle;
+    text: string;
+    cwd: string;
+    signal?: AbortSignal;
+    onMessage?: OnMessage;
+    onUsage?: OnUsage;
+    logStream: WriteStream | null;
+  }): Promise<AgentResult> {
+    const { runtime, handle, text: acpPrompt, cwd, signal, logStream } = params;
+    const { onMessage, onUsage } = params;
+
     const requestId = randomUUID();
     appendDebugLog("acp:turn:start", {
       target: redactAcpTargetForLogs(this.target),
@@ -215,7 +265,6 @@ export class AcpAgent implements Agent {
       cwd,
     });
 
-    const acpPrompt = buildAcpPrompt(prompt, this.schema);
     const promptTokenEstimate = estimateTokens(acpPrompt.length);
 
     const startedAt = Date.now();
@@ -266,7 +315,6 @@ export class AcpAgent implements Agent {
     // streams the entire response as one continuous message without any
     // tool_call to break it up).
     let outputBuf = "";
-    const logStream = logPath ? createWriteStream(logPath) : null;
 
     const computeUsage = (): TokenUsage => {
       const usedDelta = Math.max(0, latestUsed - iterationStartUsed);
@@ -300,148 +348,146 @@ export class AcpAgent implements Agent {
       pendingStream = null;
     };
 
+    // Surface an initial input-token estimate immediately so the renderer
+    // shows non-zero numbers as soon as the iteration starts.
+    onUsage?.(computeUsage());
+
     try {
-      // Surface an initial input-token estimate immediately so the renderer
-      // shows non-zero numbers as soon as the iteration starts.
-      onUsage?.(computeUsage());
+      for await (const event of turn.events) {
+        logStream?.write(`${JSON.stringify(event)}\n`);
 
-      try {
-        for await (const event of turn.events) {
-          logStream?.write(`${JSON.stringify(event)}\n`);
-
-          if (event.type === "text_delta") {
-            const stream = event.stream ?? "output";
-            const text = event.text;
-            if (!text) continue;
-            if (pendingStream !== null && pendingStream !== stream) {
-              flushPendingMessage();
-            }
-            pendingStream = stream;
-            pendingMessage += text;
-            // Count both output and thought streams toward output tokens -
-            // reasoning is real generated text that consumes tokens. Without
-            // this, agents that stream reasoning before answering (Gemini,
-            // GPT-5, etc.) leave the renderer at 0 output tokens for the
-            // entire thinking phase. outputBuf stays output-only because it
-            // is used for JSON parsing and reasoning text would corrupt it.
-            if (stream === "output") {
-              outputBuf += text;
-            }
-            agentOutputChars += text.length;
-            onUsage?.(computeUsage());
-            continue;
-          }
-
-          if (event.type === "tool_call") {
-            // A tool_call ends the in-flight assistant message - flush
-            // whatever prose the assistant streamed so far, but don't surface
-            // the tool_call text itself. Tool descriptions like
-            // "tool call (completed)" are noisy and not useful in the TUI;
-            // the user wants to see assistant prose, not mechanics.
+        if (event.type === "text_delta") {
+          const stream = event.stream ?? "output";
+          const text = event.text;
+          if (!text) continue;
+          if (pendingStream !== null && pendingStream !== stream) {
             flushPendingMessage();
-            // Each tool call (not its many tool_call_update follow-ups) bumps
-            // the input-cost heuristic so the fallback estimate scales with
-            // actual work. Adapters tag the initial event "tool_call" and
-            // later updates "tool_call_update" - count only the former.
-            if (event.tag === "tool_call") {
-              toolCallCount += 1;
-              if (!usageUpdateReceived) onUsage?.(computeUsage());
-            }
-            continue;
           }
+          pendingStream = stream;
+          pendingMessage += text;
+          // Count both output and thought streams toward output tokens -
+          // reasoning is real generated text that consumes tokens. Without
+          // this, agents that stream reasoning before answering (Gemini,
+          // GPT-5, etc.) leave the renderer at 0 output tokens for the
+          // entire thinking phase. outputBuf stays output-only because it
+          // is used for JSON parsing and reasoning text would corrupt it.
+          if (stream === "output") {
+            outputBuf += text;
+          }
+          agentOutputChars += text.length;
+          onUsage?.(computeUsage());
+          continue;
+        }
 
-          if (event.type === "status") {
-            // Status events are metadata (usage_update, mode change, etc.)
-            // and fire frequently mid-stream. Don't surface their text via
-            // onMessage - it would flicker over the actual assistant message
-            // the user is reading.
-            if (typeof event.used === "number" && event.used !== latestUsed) {
-              latestUsed = event.used;
-              this.lastReportedUsed = latestUsed;
-              usageUpdateReceived = true;
-              onUsage?.(computeUsage());
-            }
-            continue;
+        if (event.type === "tool_call") {
+          // A tool_call ends the in-flight assistant message - flush
+          // whatever prose the assistant streamed so far, but don't surface
+          // the tool_call text itself. Tool descriptions like
+          // "tool call (completed)" are noisy and not useful in the TUI;
+          // the user wants to see assistant prose, not mechanics.
+          flushPendingMessage();
+          // Each tool call (not its many tool_call_update follow-ups) bumps
+          // the input-cost heuristic so the fallback estimate scales with
+          // actual work. Adapters tag the initial event "tool_call" and
+          // later updates "tool_call_update" - count only the former.
+          if (event.tag === "tool_call") {
+            toolCallCount += 1;
+            if (!usageUpdateReceived) onUsage?.(computeUsage());
           }
+          continue;
         }
-        flushPendingMessage();
-      } catch (error) {
-        if (signal?.aborted || isAbortError(error)) {
-          await turn.cancel({ reason: "gnhf-aborted" }).catch(() => undefined);
-          appendDebugLog("acp:turn:aborted", {
-            target: redactAcpTargetForLogs(this.target),
-            requestId,
-            elapsedMs: Date.now() - startedAt,
-          });
-          throw createAbortError();
+
+        if (event.type === "status") {
+          // Status events are metadata (usage_update, mode change, etc.)
+          // and fire frequently mid-stream. Don't surface their text via
+          // onMessage - it would flicker over the actual assistant message
+          // the user is reading.
+          if (typeof event.used === "number" && event.used !== latestUsed) {
+            latestUsed = event.used;
+            this.lastReportedUsed = latestUsed;
+            usageUpdateReceived = true;
+            onUsage?.(computeUsage());
+          }
+          continue;
         }
-        appendDebugLog("acp:turn:stream-error", {
+      }
+      flushPendingMessage();
+    } catch (error) {
+      if (signal?.aborted || isAbortError(error)) {
+        await turn.cancel({ reason: "gnhf-aborted" }).catch(() => undefined);
+        appendDebugLog("acp:turn:aborted", {
           target: redactAcpTargetForLogs(this.target),
           requestId,
           elapsedMs: Date.now() - startedAt,
-          error: serializeAcpErrorForLog(error, this.target),
         });
-        throw redactAcpErrorForThrow(error, this.target);
-      }
-
-      const result: AcpRuntimeTurnResult = await turn.result;
-      appendDebugLog("acp:turn:result", {
-        target: redactAcpTargetForLogs(this.target),
-        requestId,
-        status: result.status,
-        stopReason:
-          result.status === "completed" || result.status === "cancelled"
-            ? result.stopReason
-            : undefined,
-        errorCode: result.status === "failed" ? result.error.code : undefined,
-        retryable:
-          result.status === "failed" ? result.error.retryable : undefined,
-        elapsedMs: Date.now() - startedAt,
-        outputLength: outputBuf.length,
-      });
-
-      if (result.status === "cancelled") {
         throw createAbortError();
       }
-      if (result.status === "failed") {
-        const message = redactRawAcpTargetInString(
-          result.error.message || "ACP turn failed",
-          this.target,
-        );
-        if (result.error.retryable === false) {
-          throw new PermanentAgentError(
-            message,
-            result.error.code ?? "ACP_TURN_FAILED",
-          );
-        }
-        throw new Error(message);
-      }
-
-      if (lastOutputMessage.length === 0 && outputBuf.length === 0) {
-        throw new Error("ACP agent returned no output text");
-      }
-
-      // Try the most recent assistant message first - that's where the
-      // structured answer is supposed to live. Fall back to extracting a
-      // JSON object out of the full output stream if the last message
-      // alone doesn't parse (e.g. the agent streamed prose and JSON in
-      // one uninterrupted message, so we have to dig the JSON out).
-      let parsed = parseAgentJson(lastOutputMessage);
-      if (parsed === null && outputBuf !== lastOutputMessage) {
-        parsed = parseAgentJson(outputBuf);
-      }
-      if (parsed === null) {
-        const preview = (lastOutputMessage || outputBuf).slice(0, 200);
-        throw new Error(
-          `Failed to parse ACP agent output as JSON. Last assistant message started with: ${JSON.stringify(preview)}`,
-        );
-      }
-
-      const output = validateAgentOutput(parsed, this.schema);
-      return { output, usage: computeUsage() };
-    } finally {
-      logStream?.end();
+      appendDebugLog("acp:turn:stream-error", {
+        target: redactAcpTargetForLogs(this.target),
+        requestId,
+        elapsedMs: Date.now() - startedAt,
+        error: serializeAcpErrorForLog(error, this.target),
+      });
+      throw redactAcpErrorForThrow(error, this.target);
     }
+
+    const result: AcpRuntimeTurnResult = await turn.result;
+    appendDebugLog("acp:turn:result", {
+      target: redactAcpTargetForLogs(this.target),
+      requestId,
+      status: result.status,
+      stopReason:
+        result.status === "completed" || result.status === "cancelled"
+          ? result.stopReason
+          : undefined,
+      errorCode: result.status === "failed" ? result.error.code : undefined,
+      retryable:
+        result.status === "failed" ? result.error.retryable : undefined,
+      elapsedMs: Date.now() - startedAt,
+      outputLength: outputBuf.length,
+    });
+
+    if (result.status === "cancelled") {
+      throw createAbortError();
+    }
+    if (result.status === "failed") {
+      const message = redactRawAcpTargetInString(
+        result.error.message || "ACP turn failed",
+        this.target,
+      );
+      if (result.error.retryable === false) {
+        throw new PermanentAgentError(
+          message,
+          result.error.code ?? "ACP_TURN_FAILED",
+        );
+      }
+      throw new Error(message);
+    }
+
+    if (lastOutputMessage.length === 0 && outputBuf.length === 0) {
+      throw new EmptyAgentResponseError("ACP agent returned no output text", {
+        turnCompleted: result.status === "completed",
+      });
+    }
+
+    // Try the most recent assistant message first - that's where the
+    // structured answer is supposed to live. Fall back to extracting a
+    // JSON object out of the full output stream if the last message
+    // alone doesn't parse (e.g. the agent streamed prose and JSON in
+    // one uninterrupted message, so we have to dig the JSON out).
+    let parsed = parseAgentJson(lastOutputMessage);
+    if (parsed === null && outputBuf !== lastOutputMessage) {
+      parsed = parseAgentJson(outputBuf);
+    }
+    if (parsed === null) {
+      const preview = (lastOutputMessage || outputBuf).slice(0, 200);
+      throw new Error(
+        `Failed to parse ACP agent output as JSON. Last assistant message started with: ${JSON.stringify(preview)}`,
+      );
+    }
+
+    const output = validateAgentOutput(parsed, this.schema);
+    return { output, usage: computeUsage() };
   }
 
   async close(): Promise<void> {
