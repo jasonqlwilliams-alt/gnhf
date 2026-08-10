@@ -416,6 +416,34 @@ describe("PiAgent", () => {
     expect(result.output.summary).toBe("ok");
   });
 
+  it("recovers JSON wrapped in Markdown fences", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new PiAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, {
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content:
+          "```json\n" +
+          JSON.stringify({
+            success: true,
+            summary: "fenced output",
+            key_changes_made: [],
+            key_learnings: [],
+          }) +
+          "\n```",
+      },
+    });
+    proc.emit("close", 0);
+
+    const result = await promise;
+    expect(result.output.success).toBe(true);
+    expect(result.output.summary).toBe("fenced output");
+  });
+
   it("rejects invalid output shape", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
