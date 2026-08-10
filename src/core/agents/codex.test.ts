@@ -203,4 +203,21 @@ describe("CodexAgent", () => {
     );
     expect(proc.kill).not.toHaveBeenCalled();
   });
+
+  it("surfaces a structured error emitted on stdout after a non-zero exit", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new CodexAgent("/tmp/schema.json");
+
+    const promise = agent.run("test prompt", "/work/dir");
+    proc.stdout.emit(
+      "data",
+      Buffer.from('{"type":"error","error":{"message":"login required"}}\n'),
+    );
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toThrow(
+      "codex exited with code 1: login required",
+    );
+  });
 });

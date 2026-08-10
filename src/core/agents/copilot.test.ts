@@ -332,4 +332,18 @@ describe("CopilotAgent", () => {
 
     await expect(promise).rejects.toThrow("Failed to parse copilot output");
   });
+
+  it("surfaces a structured error emitted on stdout after a non-zero exit", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new CopilotAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, { type: "error", error: { message: "login required" } });
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toThrow(
+      "copilot exited with code 1: login required",
+    );
+  });
 });

@@ -509,4 +509,18 @@ describe("PiAgent", () => {
 
     await expect(promise).rejects.toThrow("pi exited with code 2: bad things");
   });
+
+  it("surfaces a structured error emitted on stdout after a non-zero exit", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new PiAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, { type: "error", error: { message: "login required" } });
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toThrow(
+      "pi exited with code 1: login required",
+    );
+  });
 });

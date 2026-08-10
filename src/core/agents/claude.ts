@@ -11,17 +11,14 @@ import {
   PermanentAgentError,
 } from "./types.js";
 import { shutdownChildProcess } from "./managed-process.js";
-import { parseJSONLStream, setupAbortHandler } from "./stream-utils.js";
+import {
+  appendExitOutputTail,
+  describeChildProcessExit,
+  parseJSONLStream,
+  setupAbortHandler,
+} from "./stream-utils.js";
 
 const DEFAULT_FINAL_RESULT_EXIT_GRACE_MS = 15_000;
-/** Upper bound on the stdout tail kept for non-zero-exit error reporting. */
-const MAX_EXIT_OUTPUT_CHARS = 4_000;
-/**
- * Tighter bound on unstructured stdout quoted back in the failure detail: that
- * text lands in notes.md and is replayed in every later iteration prompt.
- */
-const MAX_RAW_TAIL_CHARS = 400;
-const RAW_TAIL_ELISION = "[...truncated, full output in the iteration log] ";
 
 interface ClaudeAssistantEvent {
   type: "assistant";
@@ -204,103 +201,6 @@ function isPermanentClaudeError(output: string): boolean {
   return /credit balance\s+is\s+too\s+low/i.test(output);
 }
 
-/** Keep only the last `MAX_EXIT_OUTPUT_CHARS` characters so long streams stay bounded. */
-function appendBoundedTail(existing: string, chunk: string): string {
-  const combined = existing + chunk;
-  return combined.length > MAX_EXIT_OUTPUT_CHARS
-    ? combined.slice(combined.length - MAX_EXIT_OUTPUT_CHARS)
-    : combined;
-}
-
-function errorTextFromEvent(event: unknown): string | null {
-  if (!event || typeof event !== "object") return null;
-  const record = event as Record<string, unknown>;
-
-  const error = record.error;
-  if (typeof error === "string" && error.trim()) return error.trim();
-  if (error && typeof error === "object") {
-    const message = (error as Record<string, unknown>).message;
-    if (typeof message === "string" && message.trim()) return message.trim();
-  }
-
-  if (record.is_error === true || record.type === "error") {
-    for (const key of ["result", "message", "subtype"]) {
-      const value = record[key];
-      if (typeof value === "string" && value.trim()) return value.trim();
-    }
-  }
-
-  return null;
-}
-
-/** Quote only the end of unstructured output, marking what was dropped. */
-function elideRawTail(raw: string): string {
-  return raw.length > MAX_RAW_TAIL_CHARS
-    ? `${RAW_TAIL_ELISION}${raw.slice(raw.length - MAX_RAW_TAIL_CHARS)}`
-    : raw;
-}
-
-interface StdoutFailure {
-  /** Error text the CLI itself authored in structured stdout events. */
-  structured: string;
-  /** Text worth reporting: the structured text, or a short raw tail. */
-  reported: string;
-}
-
-/**
- * Pull the CLI's own error text out of its stdout, which is JSONL when the run
- * got far enough to stream events and plain text otherwise. Falls back to a
- * bounded raw tail so the reported detail is never empty when stdout had
- * content.
- */
-function extractStdoutError(stdoutTail: string): StdoutFailure {
-  const messages: string[] = [];
-  for (const line of stdoutTail.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      const message = errorTextFromEvent(JSON.parse(line));
-      if (message) messages.push(message);
-    } catch {
-      // Not JSON: covered by the raw-tail fallback below.
-    }
-  }
-  const structured = messages.join("\n");
-  return {
-    structured,
-    reported: structured || elideRawTail(stdoutTail.trim()),
-  };
-}
-
-interface ExitFailure {
-  detail: string;
-  permanent: boolean;
-}
-
-/**
- * Describe a non-zero exit. `detail` reports everything both streams offered,
- * while `permanent` is decided only from text the CLI itself authored - stderr
- * and structured stdout error fields - so agent output that merely quotes a
- * permanent-failure phrase cannot abort an otherwise retryable run.
- */
-function describeExitFailure(
-  code: number | null,
-  stdoutTail: string,
-  stderr: string,
-): ExitFailure {
-  const trimmedStderr = stderr.trim();
-  const stdoutError = extractStdoutError(stdoutTail);
-  const segments = [trimmedStderr, stdoutError.reported].filter(Boolean);
-  return {
-    detail:
-      segments.length > 0
-        ? `claude exited with code ${code}: ${segments.join("\n")}`
-        : `claude exited with code ${code} and produced no output`,
-    permanent: isPermanentClaudeError(
-      [trimmedStderr, stdoutError.structured].filter(Boolean).join("\n"),
-    ),
-  };
-}
-
 export class ClaudeAgent implements Agent {
   name = "claude";
 
@@ -375,7 +275,7 @@ export class ClaudeAgent implements Agent {
       });
 
       child.stdout!.on("data", (data: Buffer) => {
-        stdoutTail = appendBoundedTail(stdoutTail, data.toString());
+        stdoutTail = appendExitOutputTail(stdoutTail, data.toString());
       });
 
       child.on("error", (err) => {
@@ -501,9 +401,14 @@ export class ClaudeAgent implements Agent {
         }
         logStream?.end();
         if (code !== 0 && !closedAfterFinalCleanup) {
-          const failure = describeExitFailure(code, stdoutTail, stderr);
+          const failure = describeChildProcessExit(
+            "claude",
+            code,
+            stdoutTail,
+            stderr,
+          );
           reject(
-            failure.permanent
+            isPermanentClaudeError(failure.errorOutput)
               ? new PermanentAgentError(
                   "claude credit balance too low - see gnhf.log",
                   failure.detail,

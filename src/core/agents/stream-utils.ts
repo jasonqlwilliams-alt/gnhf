@@ -2,8 +2,105 @@ import type { ChildProcess } from "node:child_process";
 import type { Readable } from "node:stream";
 import type { WriteStream } from "node:fs";
 
+/** Upper bound on the stdout tail kept for non-zero-exit error reporting. */
+const MAX_EXIT_OUTPUT_CHARS = 4_000;
 /**
- * Wire stderr collection, spawn-error handling, and the common close-handler
+ * Tighter bound on unstructured stdout quoted back in the failure detail: that
+ * text lands in notes.md and is replayed in every later iteration prompt.
+ */
+const MAX_RAW_TAIL_CHARS = 400;
+const RAW_TAIL_ELISION = "[...truncated, full output in the iteration log] ";
+
+/** Keep only the end of a stream so long-running processes stay bounded. */
+export function appendExitOutputTail(existing: string, chunk: string): string {
+  const combined = existing + chunk;
+  return combined.length > MAX_EXIT_OUTPUT_CHARS
+    ? combined.slice(combined.length - MAX_EXIT_OUTPUT_CHARS)
+    : combined;
+}
+
+function errorTextFromEvent(event: unknown): string | null {
+  if (!event || typeof event !== "object") return null;
+  const record = event as Record<string, unknown>;
+
+  const error = record.error;
+  if (typeof error === "string" && error.trim()) return error.trim();
+  if (error && typeof error === "object") {
+    const message = (error as Record<string, unknown>).message;
+    if (typeof message === "string" && message.trim()) return message.trim();
+  }
+
+  if (record.is_error === true || record.type === "error") {
+    for (const key of ["result", "message", "subtype"]) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+
+  return null;
+}
+
+function elideRawTail(raw: string): string {
+  return raw.length > MAX_RAW_TAIL_CHARS
+    ? `${RAW_TAIL_ELISION}${raw.slice(raw.length - MAX_RAW_TAIL_CHARS)}`
+    : raw;
+}
+
+interface StdoutFailure {
+  structured: string;
+  reported: string;
+}
+
+function extractStdoutError(stdoutTail: string): StdoutFailure {
+  const messages: string[] = [];
+  for (const line of stdoutTail.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const message = errorTextFromEvent(JSON.parse(line));
+      if (message) messages.push(message);
+    } catch {
+      // Not JSON: covered by the raw-tail fallback below.
+    }
+  }
+  const structured = messages.join("\n");
+  return {
+    structured,
+    reported: structured || elideRawTail(stdoutTail.trim()),
+  };
+}
+
+export interface ChildProcessExitFailure {
+  detail: string;
+  /** CLI-authored error text suitable for permanent-error classification. */
+  errorOutput: string;
+}
+
+/**
+ * Describe a non-zero exit. The detail reports both streams, while
+ * `errorOutput` excludes unstructured stdout that may merely quote an error.
+ */
+export function describeChildProcessExit(
+  agentName: string,
+  code: number | null,
+  stdoutTail: string,
+  stderr: string,
+): ChildProcessExitFailure {
+  const trimmedStderr = stderr.trim();
+  const stdoutError = extractStdoutError(stdoutTail);
+  const segments = [trimmedStderr, stdoutError.reported].filter(Boolean);
+  return {
+    detail:
+      segments.length > 0
+        ? `${agentName} exited with code ${code}: ${segments.join("\n")}`
+        : `${agentName} exited with code ${code} and produced no output`,
+    errorOutput: [trimmedStderr, stdoutError.structured]
+      .filter(Boolean)
+      .join("\n"),
+  };
+}
+
+/**
+ * Wire output collection, spawn-error handling, and the common close-handler
  * prefix (logStream.end + non-zero exit code rejection) for a child process.
  * Calls `onSuccess` only when the process exits with code 0.
  */
@@ -15,6 +112,11 @@ export function setupChildProcessHandlers(
   onSuccess: () => void,
 ): void {
   let stderr = "";
+  let stdoutTail = "";
+
+  child.stdout!.on("data", (data: Buffer) => {
+    stdoutTail = appendExitOutputTail(stdoutTail, data.toString());
+  });
 
   child.stderr!.on("data", (data: Buffer) => {
     stderr += data.toString();
@@ -27,7 +129,13 @@ export function setupChildProcessHandlers(
   child.on("close", (code) => {
     logStream?.end();
     if (code !== 0) {
-      reject(new Error(`${agentName} exited with code ${code}: ${stderr}`));
+      const failure = describeChildProcessExit(
+        agentName,
+        code,
+        stdoutTail,
+        stderr,
+      );
+      reject(new Error(failure.detail));
       return;
     }
     onSuccess();
