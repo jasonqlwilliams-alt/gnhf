@@ -226,6 +226,7 @@ export class AcpAgent implements Agent {
           sessionKey: this.runId,
         },
         onUsage,
+        signal,
         initialText: buildAcpPrompt(prompt, this.schema),
         runTurn: (text, onTurnUsage) =>
           this.runTurn({

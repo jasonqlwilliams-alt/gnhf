@@ -242,6 +242,7 @@ export class RovoDevAgent implements Agent {
         logEvent: "rovodev:output:continuation",
         logFields: { sessionId: activeSessionId },
         onUsage,
+        signal: runController.signal,
         initialText: prompt,
         runTurn: async (text, onTurnUsage) => {
           await this.setChatMessage(

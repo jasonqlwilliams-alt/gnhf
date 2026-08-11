@@ -380,6 +380,7 @@ export class OpenCodeAgent implements Agent {
         logEvent: "opencode:output:continuation",
         logFields: { sessionId: activeSessionId },
         onUsage,
+        signal: runController.signal,
         initialText: buildPrompt(prompt, this.schema),
         runTurn: (text, onTurnUsage) =>
           this.streamMessage(

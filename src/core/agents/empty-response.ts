@@ -39,6 +39,10 @@ function isAbortError(error: unknown): boolean {
   );
 }
 
+function createAbortError(): Error {
+  return new Error("Agent was aborted");
+}
+
 export function addTokenUsage(left: TokenUsage, right: TokenUsage): TokenUsage {
   const total: TokenUsage = {
     inputTokens: left.inputTokens + right.inputTokens,
@@ -57,6 +61,7 @@ export interface EmptyResponseRetryOptions {
   logEvent: string;
   logFields?: Record<string, unknown>;
   onUsage?: OnUsage;
+  signal?: AbortSignal;
   /**
    * Text for the first turn. The continuation turn is always the bare nudge -
    * adapters that cannot parse a bare turn apply their own existing prompt
@@ -83,6 +88,7 @@ export async function runTurnWithEmptyResponseRetry({
   logEvent,
   logFields,
   onUsage,
+  signal,
   initialText,
   runTurn,
 }: EmptyResponseRetryOptions): Promise<AgentResult> {
@@ -95,6 +101,9 @@ export async function runTurnWithEmptyResponseRetry({
 
     const firstTurnUsage = error.usage;
     onUsage?.({ ...firstTurnUsage });
+    if (signal?.aborted) {
+      throw createAbortError();
+    }
 
     appendDebugLog(logEvent, {
       ...logFields,
@@ -108,8 +117,23 @@ export async function runTurnWithEmptyResponseRetry({
         onUsage?.(addTokenUsage(firstTurnUsage, usage));
       });
     } catch (continuationError) {
+      if (continuationError instanceof EmptyAgentResponseError) {
+        const cumulativeUsage = addTokenUsage(
+          firstTurnUsage,
+          continuationError.usage,
+        );
+        onUsage?.({ ...cumulativeUsage });
+        throw new EmptyAgentResponseError(
+          signal?.aborted ? "Agent was aborted" : continuationError.message,
+          {
+            turnCompleted: continuationError.turnCompleted,
+            usage: cumulativeUsage,
+            cause: continuationError,
+          },
+        );
+      }
+
       if (
-        continuationError instanceof EmptyAgentResponseError ||
         continuationError instanceof PermanentAgentError ||
         isAbortError(continuationError)
       ) {

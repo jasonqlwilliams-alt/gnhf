@@ -365,6 +365,7 @@ export class ClaudeAgent implements Agent {
       return await runTurnWithEmptyResponseRetry({
         logEvent: "claude:output:continuation",
         onUsage,
+        signal,
         initialText: prompt,
         runTurn: (text, onTurnUsage) =>
           this.runTurn(text, cwd, {

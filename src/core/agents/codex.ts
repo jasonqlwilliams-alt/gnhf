@@ -242,6 +242,7 @@ export class CodexAgent implements Agent {
       return await runTurnWithEmptyResponseRetry({
         logEvent: "codex:output:continuation",
         onUsage,
+        signal,
         initialText: prompt,
         runTurn: (text, onTurnUsage) =>
           this.runTurn(text, cwd, {
