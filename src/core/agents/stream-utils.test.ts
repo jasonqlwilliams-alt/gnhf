@@ -39,10 +39,6 @@ describe("AgentLogFile", () => {
     }
   });
 
-  function flush(): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, 20));
-  }
-
   it("keeps recording stdout that arrives after an aborted run finished", async () => {
     const logPath = tempLogPath();
     const logFile = new AgentLogFile(logPath);
@@ -53,10 +49,10 @@ describe("AgentLogFile", () => {
 
     stdout.emit("data", Buffer.from('{"type":"before-abort"}\n'));
     // The abort path rejects the run while the child is still streaming.
-    logFile.finish();
+    const closed = logFile.finish();
     stdout.emit("data", Buffer.from('{"type":"after-abort"}\n'));
     child.emit("close", 143);
-    await flush();
+    await closed;
 
     const written = readFileSync(logPath, "utf8");
     expect(written).toContain("before-abort");
@@ -74,9 +70,9 @@ describe("AgentLogFile", () => {
     const second = createMockChild();
     logFile.track(second as never);
     logFile.write('{"turn":2}\n');
-    logFile.finish();
+    const closed = logFile.finish();
     second.emit("close", 0);
-    await flush();
+    await closed;
 
     const written = readFileSync(logPath, "utf8");
     expect(written).toContain('{"turn":1}');
@@ -85,7 +81,6 @@ describe("AgentLogFile", () => {
     // A late stdout chunk after the file closed must not raise
     // ERR_STREAM_WRITE_AFTER_END.
     expect(() => logFile.write('{"turn":"late"}\n')).not.toThrow();
-    await flush();
     expect(readFileSync(logPath, "utf8")).not.toContain("late");
   });
 
@@ -97,8 +92,7 @@ describe("AgentLogFile", () => {
     logFile.write('{"spawn":"failed"}\n');
 
     child.emit("error", new Error("ENOENT"));
-    logFile.finish();
-    await flush();
+    await logFile.finish();
 
     expect(readFileSync(logPath, "utf8")).toContain('{"spawn":"failed"}');
   });

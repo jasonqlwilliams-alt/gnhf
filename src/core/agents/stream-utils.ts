@@ -19,14 +19,19 @@ export interface AgentLogSink {
  */
 export class AgentLogFile implements AgentLogSink {
   private readonly stream: ReturnType<typeof createWriteStream> | null;
+  private readonly closePromise: Promise<void>;
   private openChildren = 0;
   private runFinished = false;
   private ended = false;
 
   constructor(logPath?: string) {
-    this.stream = logPath ? createWriteStream(logPath) : null;
+    const stream = logPath ? createWriteStream(logPath) : null;
+    this.stream = stream;
+    this.closePromise = stream
+      ? new Promise((resolve) => stream.once("close", () => resolve()))
+      : Promise.resolve();
     // Log writes are best effort; a failed write must not take down the run.
-    this.stream?.on("error", (error) => {
+    stream?.on("error", (error) => {
       appendDebugLog("agent:log:write-failed", {
         error: serializeError(error),
       });
@@ -53,9 +58,10 @@ export class AgentLogFile implements AgentLogSink {
   }
 
   /** The run is done; close as soon as no tracked child is still running. */
-  finish(): void {
+  finish(): Promise<void> {
     this.runFinished = true;
     this.endIfIdle();
+    return this.closePromise;
   }
 
   private endIfIdle(): void {
