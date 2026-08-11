@@ -230,10 +230,7 @@ export class AcpAgent implements Agent {
         onUsage,
         signal,
         combineUsage: (firstTurnUsage, continuationUsage) => {
-          const combined = addTokenUsage(
-            firstTurnUsage,
-            continuationUsage,
-          );
+          const combined = addTokenUsage(firstTurnUsage, continuationUsage);
           if (!turnUsageUpdates[0] && turnUsageUpdates[1]) {
             combined.inputTokens = continuationUsage.inputTokens;
             if (!continuationUsage.estimated) {
