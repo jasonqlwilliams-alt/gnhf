@@ -118,4 +118,49 @@ describe("runTurnWithEmptyResponseRetry", () => {
     expect(onUsage).toHaveBeenLastCalledWith(usage(13, 7));
     expect(runTurn).toHaveBeenCalledTimes(2);
   });
+
+  it("rejects a successful continuation after cumulative usage aborts", async () => {
+    const controller = new AbortController();
+    const onUsage = vi.fn((reported: TokenUsage) => {
+      if (reported.inputTokens + reported.outputTokens >= 20) {
+        controller.abort();
+      }
+    });
+    const continuationUsage = usage(3, 2);
+    const runTurn = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new EmptyAgentResponseError("first empty", {
+          turnCompleted: true,
+          usage: usage(10, 5),
+        }),
+      )
+      .mockImplementationOnce(
+        async (_text: string, onTurnUsage: (usage: TokenUsage) => void) => {
+          onTurnUsage(continuationUsage);
+          return {
+            output: {
+              success: true,
+              summary: "recovered",
+              key_changes_made: [],
+              key_learnings: [],
+            },
+            usage: continuationUsage,
+          };
+        },
+      );
+
+    await expect(
+      runTurnWithEmptyResponseRetry({
+        logEvent: "agent:continuation",
+        onUsage,
+        signal: controller.signal,
+        initialText: "prompt",
+        runTurn,
+      }),
+    ).rejects.toThrow("Agent was aborted");
+
+    expect(onUsage).toHaveBeenLastCalledWith(usage(13, 7));
+    expect(runTurn).toHaveBeenCalledTimes(2);
+  });
 });

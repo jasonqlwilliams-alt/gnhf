@@ -566,6 +566,68 @@ describe("AcpAgent", () => {
     );
   });
 
+  it("does not add fallback input to a cumulative continuation update", async () => {
+    const { runtime } = createFakeRuntime([
+      {
+        events: [
+          {
+            type: "status",
+            text: "u",
+            tag: "usage_update",
+            used: 100,
+            size: 1000,
+          },
+          textDelta(JSON.stringify(VALID_OUTPUT)),
+        ],
+        result: { status: "completed" },
+      },
+      { events: [], result: { status: "completed" } },
+      {
+        events: [
+          {
+            type: "status",
+            text: "u",
+            tag: "usage_update",
+            used: 160,
+            size: 1000,
+          },
+          textDelta(JSON.stringify(VALID_OUTPUT)),
+        ],
+        result: { status: "completed" },
+      },
+    ]);
+    const agent = makeAgent(runtime);
+
+    await agent.run("warmup", "/w");
+    const onUsage = vi.fn();
+    const result = await agent.run("recover", "/w", { onUsage });
+
+    expect(result.usage.inputTokens).toBe(60);
+    expect(onUsage).toHaveBeenLastCalledWith(result.usage);
+  });
+
+  it("continues when tool work leaves no final output message", async () => {
+    const { runtime, calls } = createFakeRuntime([
+      {
+        events: [
+          textDelta("I will inspect the file."),
+          { type: "tool_call", text: "Read file", toolCallId: "1" },
+        ],
+        result: { status: "completed" },
+      },
+      {
+        events: [textDelta(JSON.stringify(VALID_OUTPUT))],
+        result: { status: "completed" },
+      },
+    ]);
+    const agent = makeAgent(runtime);
+
+    const result = await agent.run("p", "/w");
+
+    expect(result.output).toEqual(VALID_OUTPUT);
+    expect(calls.startTurnInputs).toHaveLength(2);
+  });
+
   it("rejects after the ACP continuation is also empty", async () => {
     const { runtime, calls } = createFakeRuntime([
       { events: [], result: { status: "completed" } },

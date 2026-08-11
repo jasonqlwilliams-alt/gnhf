@@ -13,6 +13,7 @@ import type { WriteStream } from "node:fs";
 import { appendDebugLog, serializeError } from "../debug-log.js";
 import { redactAcpTargetForLogs } from "../config.js";
 import {
+  addTokenUsage,
   EmptyAgentResponseError,
   runTurnWithEmptyResponseRetry,
 } from "./empty-response.js";
@@ -215,6 +216,7 @@ export class AcpAgent implements Agent {
     this.handle = handle;
 
     const logStream = logPath ? createWriteStream(logPath) : null;
+    const turnUsageUpdates: boolean[] = [];
     try {
       // The ACP session is persistent, so a continuation turn still sees the
       // first turn's reasoning, tool calls, and the output contract that
@@ -227,9 +229,24 @@ export class AcpAgent implements Agent {
         },
         onUsage,
         signal,
+        combineUsage: (firstTurnUsage, continuationUsage) => {
+          const combined = addTokenUsage(
+            firstTurnUsage,
+            continuationUsage,
+          );
+          if (!turnUsageUpdates[0] && turnUsageUpdates[1]) {
+            combined.inputTokens = continuationUsage.inputTokens;
+            if (!continuationUsage.estimated) {
+              delete combined.estimated;
+            }
+          }
+          return combined;
+        },
         initialText: buildAcpPrompt(prompt, this.schema),
-        runTurn: (text, onTurnUsage) =>
-          this.runTurn({
+        runTurn: (text, onTurnUsage) => {
+          const turnIndex = turnUsageUpdates.length;
+          turnUsageUpdates.push(false);
+          return this.runTurn({
             runtime,
             handle,
             text,
@@ -237,8 +254,12 @@ export class AcpAgent implements Agent {
             signal,
             onMessage,
             onUsage: onTurnUsage,
+            onUsageUpdate: () => {
+              turnUsageUpdates[turnIndex] = true;
+            },
             logStream,
-          }),
+          });
+        },
       });
     } finally {
       logStream?.end();
@@ -253,10 +274,11 @@ export class AcpAgent implements Agent {
     signal?: AbortSignal;
     onMessage?: OnMessage;
     onUsage?: OnUsage;
+    onUsageUpdate?: () => void;
     logStream: WriteStream | null;
   }): Promise<AgentResult> {
     const { runtime, handle, text: acpPrompt, cwd, signal, logStream } = params;
-    const { onMessage, onUsage } = params;
+    const { onMessage, onUsage, onUsageUpdate } = params;
 
     const requestId = randomUUID();
     appendDebugLog("acp:turn:start", {
@@ -311,10 +333,8 @@ export class AcpAgent implements Agent {
     // the turn, so this is the primary candidate to JSON.parse - separating
     // it from intermediate prose like "Let me examine the code...".
     let lastOutputMessage = "";
-    // Concatenation of every output-stream chunk in the turn, used as a
-    // fallback when `lastOutputMessage` doesn't parse (e.g. when the agent
-    // streams the entire response as one continuous message without any
-    // tool_call to break it up).
+    // Concatenation of output-stream chunks since the most recent tool-call
+    // boundary, used as a fallback when `lastOutputMessage` doesn't parse.
     let outputBuf = "";
 
     const computeUsage = (): TokenUsage => {
@@ -387,6 +407,8 @@ export class AcpAgent implements Agent {
           // "tool call (completed)" are noisy and not useful in the TUI;
           // the user wants to see assistant prose, not mechanics.
           flushPendingMessage();
+          lastOutputMessage = "";
+          outputBuf = "";
           // Each tool call (not its many tool_call_update follow-ups) bumps
           // the input-cost heuristic so the fallback estimate scales with
           // actual work. Adapters tag the initial event "tool_call" and
@@ -407,6 +429,7 @@ export class AcpAgent implements Agent {
             latestUsed = event.used;
             this.lastReportedUsed = latestUsed;
             usageUpdateReceived = true;
+            onUsageUpdate?.();
             onUsage?.(computeUsage());
           }
           continue;

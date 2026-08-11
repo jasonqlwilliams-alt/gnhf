@@ -62,6 +62,7 @@ export interface EmptyResponseRetryOptions {
   logFields?: Record<string, unknown>;
   onUsage?: OnUsage;
   signal?: AbortSignal;
+  combineUsage?: (left: TokenUsage, right: TokenUsage) => TokenUsage;
   /**
    * Text for the first turn. The continuation turn is always the bare nudge -
    * adapters that cannot parse a bare turn apply their own existing prompt
@@ -89,6 +90,7 @@ export async function runTurnWithEmptyResponseRetry({
   logFields,
   onUsage,
   signal,
+  combineUsage = addTokenUsage,
   initialText,
   runTurn,
 }: EmptyResponseRetryOptions): Promise<AgentResult> {
@@ -114,11 +116,11 @@ export async function runTurnWithEmptyResponseRetry({
     let retry: AgentResult;
     try {
       retry = await runTurn(EMPTY_RESPONSE_CONTINUATION_PROMPT, (usage) => {
-        onUsage?.(addTokenUsage(firstTurnUsage, usage));
+        onUsage?.(combineUsage(firstTurnUsage, usage));
       });
     } catch (continuationError) {
       if (continuationError instanceof EmptyAgentResponseError) {
-        const cumulativeUsage = addTokenUsage(
+        const cumulativeUsage = combineUsage(
           firstTurnUsage,
           continuationError.usage,
         );
@@ -154,9 +156,13 @@ export async function runTurnWithEmptyResponseRetry({
       });
     }
 
+    if (signal?.aborted) {
+      throw createAbortError();
+    }
+
     return {
       output: retry.output,
-      usage: addTokenUsage(firstTurnUsage, retry.usage),
+      usage: combineUsage(firstTurnUsage, retry.usage),
     };
   }
 }

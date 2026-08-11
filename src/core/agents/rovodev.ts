@@ -592,6 +592,7 @@ export class RovoDevAgent implements Agent {
     };
 
     const resetCurrentMessage = () => {
+      latestTextSegment = "";
       currentTextParts = [];
       currentTextIndexes = new Map<number, number>();
     };

@@ -479,6 +479,60 @@ describe("RovoDevAgent", () => {
     );
   });
 
+  it("continues when tool work leaves no final text segment", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ status: "healthy" }))
+      .mockResolvedValueOnce(
+        jsonResponse({ session_id: "session-123", title: "gnhf" }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ message: "ok", prompt_set: true }))
+      .mockResolvedValueOnce(jsonResponse({ response: "Chat message set" }))
+      .mockResolvedValueOnce(
+        textResponse(
+          [
+            "event: part_start",
+            'data: {"index":0,"part":{"content":"I will inspect the file.","part_kind":"text"},"event_kind":"part_start"}',
+            "",
+            "event: on_call_tools_start",
+            'data: {"parts":[{"tool_name":"open_files","args":"{}","tool_call_id":"tool-1","part_kind":"tool-call"}]}',
+            "",
+            "event: tool-return",
+            'data: {"tool_name":"open_files","content":"ok","tool_call_id":"tool-1","part_kind":"tool-return"}',
+            "",
+            "event: close",
+            "data: ",
+            "",
+          ].join("\n"),
+        ),
+      )
+      .mockResolvedValueOnce(jsonResponse({ response: "Chat message set" }))
+      .mockResolvedValueOnce(
+        textResponse(
+          [
+            "event: part_start",
+            'data: {"index":0,"part":{"content":"{\\"success\\":true,\\"summary\\":\\"recovered\\",\\"key_changes_made\\":[],\\"key_learnings\\":[]}","part_kind":"text"},"event_kind":"part_start"}',
+            "",
+            "event: close",
+            "data: ",
+            "",
+          ].join("\n"),
+        ),
+      )
+      .mockResolvedValueOnce(jsonResponse({ message: "deleted" }));
+
+    const result = await agent.run("test", "/repo");
+
+    expect(result.output.summary).toBe("recovered");
+    expect(
+      fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes("/v3/set_chat_message"),
+      ),
+    ).toHaveLength(2);
+  });
+
   it("rejects after the rovodev continuation is also empty", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
