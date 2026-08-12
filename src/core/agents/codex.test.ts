@@ -282,6 +282,32 @@ describe("CodexAgent", () => {
     );
   });
 
+  it("recovers a completed turn whose agent message is only whitespace", async () => {
+    const first = createMockProcess();
+    const second = createMockProcess();
+    mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const agent = new CodexAgent("/tmp/schema.json");
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(first, threadStarted("thread-abc"));
+    emitJson(first, agentMessage(" \n\t"));
+    emitJson(first, turnCompleted(10, 5));
+    first.emit("close", 0);
+
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(2));
+    emitJson(second, agentMessage(FINAL_OUTPUT));
+    emitJson(second, turnCompleted(3, 2));
+    second.emit("close", 0);
+
+    await expect(promise).resolves.toMatchObject({
+      output: { success: true, summary: "recovered" },
+    });
+    expect(mockAppendDebugLog).toHaveBeenCalledWith(
+      "codex:output:continuation",
+      expect.objectContaining({ attempt: 1 }),
+    );
+  });
+
   it("does not re-ask when the turn never completed", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);

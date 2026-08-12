@@ -151,8 +151,8 @@ function isFinalStructuredResult(event: ClaudeResultEvent): boolean {
   );
 }
 
-function userSpecifiedSessionContinuation(userArgs: string[]): boolean {
-  return userArgs.some((arg) => arg === "-c" || arg === "--continue");
+function isSessionContinuationArg(arg: string): boolean {
+  return arg === "-c" || arg === "--continue";
 }
 
 // `--no-session-persistence` tells claude not to write the session to disk, so
@@ -168,7 +168,10 @@ function buildClaudeArgs(
   resumeSessionId?: string | null,
 ): string[] {
   const userArgs = extraArgs ?? [];
-  const userSpecifiedPermissionMode = userArgs.some(
+  const turnArgs = resumeSessionId
+    ? userArgs.filter((arg) => !isSessionContinuationArg(arg))
+    : userArgs;
+  const userSpecifiedPermissionMode = turnArgs.some(
     (arg) =>
       arg === "--dangerously-skip-permissions" ||
       arg === "--permission-mode" ||
@@ -178,7 +181,7 @@ function buildClaudeArgs(
   );
 
   return [
-    ...userArgs,
+    ...turnArgs,
     "-p",
     prompt,
     "--verbose",
@@ -186,9 +189,7 @@ function buildClaudeArgs(
     "stream-json",
     "--json-schema",
     JSON.stringify(schema),
-    ...(resumeSessionId && !userSpecifiedSessionContinuation(userArgs)
-      ? ["--resume", resumeSessionId]
-      : []),
+    ...(resumeSessionId ? ["--resume", resumeSessionId] : []),
     ...(userSpecifiedPermissionMode ? [] : ["--dangerously-skip-permissions"]),
   ];
 }
@@ -612,7 +613,7 @@ export class ClaudeAgent implements Agent {
           const userArgs = this.extraArgs ?? [];
           const resumeBlockedReason = sessionPersistenceDisabled(userArgs)
             ? "--no-session-persistence disables session resume, so the turn cannot be continued"
-            : !turnSessionId && !userSpecifiedSessionContinuation(userArgs)
+            : !turnSessionId
               ? "claude reported no session id, so the turn cannot be resumed"
               : null;
           appendDebugLog("claude:output:missing", {

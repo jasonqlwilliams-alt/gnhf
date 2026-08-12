@@ -485,7 +485,7 @@ export class AcpAgent implements Agent {
       throw new Error(message);
     }
 
-    if (lastOutputMessage.length === 0 && outputBuf.length === 0) {
+    if (!lastOutputMessage.trim() && !outputBuf.trim()) {
       throw new EmptyAgentResponseError("ACP agent returned no output text", {
         turnCompleted: result.status === "completed",
         usage: computeUsage(),

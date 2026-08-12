@@ -348,7 +348,8 @@ export class CodexAgent implements Agent {
       });
 
       setupChildProcessHandlers(child, "codex", reject, () => {
-        if (!lastAgentMessage) {
+        const finalAgentMessage = lastAgentMessage?.trim();
+        if (!finalAgentMessage) {
           const unsupportedArg = codexResumeUnsupportedArg(this.extraArgs);
           const resumeBlockedReason = !turnThreadId
             ? "codex reported no thread id, so the turn cannot be resumed"
@@ -377,7 +378,7 @@ export class CodexAgent implements Agent {
         }
 
         try {
-          const output = JSON.parse(lastAgentMessage) as AgentOutput;
+          const output = JSON.parse(finalAgentMessage) as AgentOutput;
           resolve({ output, usage: cumulative });
         } catch (err) {
           reject(

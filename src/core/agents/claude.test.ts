@@ -1248,6 +1248,70 @@ describe("ClaudeAgent", () => {
     );
   });
 
+  it.each(["-c", "--continue"])(
+    "replaces configured %s with the captured session id for recovery",
+    async (continuationArg) => {
+      const first = createMockProcess();
+      const second = createMockProcess();
+      mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
+      const continuingAgent = new ClaudeAgent({
+        extraArgs: [continuationArg],
+      });
+
+      const promise = continuingAgent.run("prompt", "/cwd");
+
+      emitLine(first, {
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        session_id: "session-continued",
+        usage: {
+          input_tokens: 1,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+          output_tokens: 1,
+        },
+        structured_output: null,
+      });
+      first.emit("close", 0);
+
+      await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledTimes(2));
+
+      const initialArgs = mockSpawn.mock.calls[0]![1] as string[];
+      const continuationArgs = mockSpawn.mock.calls[1]![1] as string[];
+      expect(initialArgs).toContain(continuationArg);
+      expect(continuationArgs).not.toContain(continuationArg);
+      expect(continuationArgs).toContain("--resume");
+      expect(continuationArgs[continuationArgs.indexOf("--resume") + 1]).toBe(
+        "session-continued",
+      );
+
+      emitLine(second, {
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        session_id: "session-continued",
+        usage: {
+          input_tokens: 1,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+          output_tokens: 1,
+        },
+        structured_output: {
+          success: true,
+          summary: "recovered",
+          key_changes_made: [],
+          key_learnings: [],
+        },
+      });
+      second.emit("close", 0);
+
+      await expect(promise).resolves.toMatchObject({
+        output: { summary: "recovered" },
+      });
+    },
+  );
+
   it("rejects after exactly one continuation when structured_output is still null", async () => {
     const first = createMockProcess();
     const second = createMockProcess();
@@ -1337,6 +1401,40 @@ describe("ClaudeAgent", () => {
     await expect(promise).rejects.toThrow(/no session id/);
     expect(mockSpawn).toHaveBeenCalledTimes(1);
   });
+
+  it.each(["-c", "--continue"])(
+    "does not recover configured %s without a captured session id",
+    async (continuationArg) => {
+      const proc = createMockProcess();
+      mockSpawn.mockReturnValue(proc);
+      const continuingAgent = new ClaudeAgent({
+        extraArgs: [continuationArg],
+      });
+
+      const promise = continuingAgent.run("prompt", "/cwd");
+
+      emitLine(proc, {
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        usage: {
+          input_tokens: 0,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+          output_tokens: 0,
+        },
+        structured_output: null,
+      });
+      proc.emit("close", 0);
+
+      await expect(promise).rejects.toThrow(/no session id/);
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+      expect(mockAppendDebugLog).not.toHaveBeenCalledWith(
+        "claude:output:continuation",
+        expect.anything(),
+      );
+    },
+  );
 
   it("does not continue when claude reported an error result", async () => {
     const proc = createMockProcess();

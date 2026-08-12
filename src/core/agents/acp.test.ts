@@ -541,6 +541,28 @@ describe("AcpAgent", () => {
     expect(onUsage).toHaveBeenLastCalledWith(result.usage);
   });
 
+  it("nudges when a completed turn produced only whitespace output", async () => {
+    const { runtime, calls } = createFakeRuntime([
+      {
+        events: [textDelta(" \n\t")],
+        result: { status: "completed" },
+      },
+      {
+        events: [textDelta(JSON.stringify(VALID_OUTPUT))],
+        result: { status: "completed" },
+      },
+    ]);
+    const agent = makeAgent(runtime);
+
+    const result = await agent.run("p", "/w");
+
+    expect(result.output).toEqual(VALID_OUTPUT);
+    expect(calls.startTurnInputs).toHaveLength(2);
+    expect(calls.startTurnInputs[1]?.text).toContain(
+      "You did not produce a final answer",
+    );
+  });
+
   it("reports usage across both the empty turn and its continuation", async () => {
     // The first turn streams only reasoning, so it completes with no output
     // text while still burning output tokens that must survive into the total.
