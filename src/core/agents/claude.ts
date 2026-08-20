@@ -11,7 +11,12 @@ import {
   PermanentAgentError,
 } from "./types.js";
 import { shutdownChildProcess } from "./managed-process.js";
-import { parseJSONLStream, setupAbortHandler } from "./stream-utils.js";
+import {
+  appendExitOutputTail,
+  describeChildProcessExit,
+  parseJSONLStream,
+  setupAbortHandler,
+} from "./stream-utils.js";
 
 const DEFAULT_FINAL_RESULT_EXIT_GRACE_MS = 15_000;
 
@@ -192,8 +197,8 @@ function extendsUsage(next: TokenUsage, previous: TokenUsage): boolean {
   );
 }
 
-function isPermanentClaudeError(stderr: string): boolean {
-  return /credit balance\s+is\s+too\s+low/i.test(stderr);
+function isPermanentClaudeError(output: string): boolean {
+  return /credit balance\s+is\s+too\s+low/i.test(output);
 }
 
 export class ClaudeAgent implements Agent {
@@ -252,6 +257,7 @@ export class ClaudeAgent implements Agent {
       let finalResultCleanupTimer: ReturnType<typeof setTimeout> | null = null;
       let closedAfterFinalCleanup = false;
       let stderr = "";
+      let stdoutTail = "";
       const cumulative: TokenUsage = {
         inputTokens: 0,
         outputTokens: 0,
@@ -266,6 +272,10 @@ export class ClaudeAgent implements Agent {
 
       child.stderr!.on("data", (data: Buffer) => {
         stderr += data.toString();
+      });
+
+      child.stdout!.on("data", (data: Buffer) => {
+        stdoutTail = appendExitOutputTail(stdoutTail, data.toString());
       });
 
       child.on("error", (err) => {
@@ -391,14 +401,19 @@ export class ClaudeAgent implements Agent {
         }
         logStream?.end();
         if (code !== 0 && !closedAfterFinalCleanup) {
-          const detail = `claude exited with code ${code}: ${stderr}`;
+          const failure = describeChildProcessExit(
+            "claude",
+            code,
+            stdoutTail,
+            stderr,
+          );
           reject(
-            isPermanentClaudeError(stderr)
+            isPermanentClaudeError(failure.errorOutput)
               ? new PermanentAgentError(
                   "claude credit balance too low - see gnhf.log",
-                  detail,
+                  failure.detail,
                 )
-              : new Error(detail),
+              : new Error(failure.detail),
           );
           return;
         }

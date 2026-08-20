@@ -389,6 +389,61 @@ describe("PiAgent", () => {
     await expect(promise).rejects.toThrow("Failed to parse pi output");
   });
 
+  it("recovers JSON that follows a prose summary", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new PiAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, {
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content:
+          "Iteration 3 complete. Built the foundation from scratch.\n\n" +
+          JSON.stringify({
+            success: true,
+            summary: "ok",
+            key_changes_made: [],
+            key_learnings: [],
+          }),
+      },
+    });
+    proc.emit("close", 0);
+
+    const result = await promise;
+    expect(result.output.success).toBe(true);
+    expect(result.output.summary).toBe("ok");
+  });
+
+  it("recovers JSON wrapped in Markdown fences", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new PiAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, {
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content:
+          "```json\n" +
+          JSON.stringify({
+            success: true,
+            summary: "fenced output",
+            key_changes_made: [],
+            key_learnings: [],
+          }) +
+          "\n```",
+      },
+    });
+    proc.emit("close", 0);
+
+    const result = await promise;
+    expect(result.output.success).toBe(true);
+    expect(result.output.summary).toBe("fenced output");
+  });
+
   it("rejects invalid output shape", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
@@ -453,5 +508,19 @@ describe("PiAgent", () => {
     proc.emit("close", 2);
 
     await expect(promise).rejects.toThrow("pi exited with code 2: bad things");
+  });
+
+  it("surfaces a structured error emitted on stdout after a non-zero exit", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new PiAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, { type: "error", error: { message: "login required" } });
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toThrow(
+      "pi exited with code 1: login required",
+    );
   });
 });

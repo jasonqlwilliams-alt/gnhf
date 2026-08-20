@@ -13,6 +13,7 @@ export const AGENT_NAMES = [
   "opencode",
   "copilot",
   "pi",
+  "cursor",
 ] as const;
 
 export type AgentName = (typeof AGENT_NAMES)[number];
@@ -188,6 +189,27 @@ function isReservedAgentArg(agent: AgentName, arg: string): boolean {
         arg === "-h" ||
         arg === "--version" ||
         arg === "-v" ||
+        arg === "--api-key" ||
+        arg.startsWith("--api-key=")
+      );
+    case "cursor":
+      return (
+        arg === "-p" ||
+        arg === "--print" ||
+        arg === "--output-format" ||
+        arg.startsWith("--output-format=") ||
+        arg === "--stream-partial-output" ||
+        arg === "--workspace" ||
+        arg.startsWith("--workspace=") ||
+        arg === "--resume" ||
+        arg.startsWith("--resume=") ||
+        arg === "--continue" ||
+        arg === "-w" ||
+        arg === "--worktree" ||
+        arg.startsWith("--worktree=") ||
+        arg === "--worktree-base" ||
+        arg.startsWith("--worktree-base=") ||
+        arg === "--skip-worktree-setup" ||
         arg === "--api-key" ||
         arg.startsWith("--api-key=")
       );
@@ -524,6 +546,7 @@ function serializeConfig(config: Config): string {
     "#   codex: /path/to/custom-codex",
     "#   copilot: /path/to/custom-copilot",
     "#   pi: /path/to/custom-pi",
+    "#   cursor: /path/to/custom-cursor-agent",
     "",
     "# Native agent CLI arg overrides (optional)",
     "# ACP targets do not support path or arg overrides.",
@@ -544,6 +567,9 @@ function serializeConfig(config: Config): string {
     "#     - gpt-5.5",
     "#     - --thinking",
     "#     - high",
+    "#   cursor:",
+    "#     - --model",
+    "#     - composer-2.5",
     "",
     "# Custom ACP target commands (optional)",
     "# Maps acp:<target> names to spawn commands. Useful for naming a",

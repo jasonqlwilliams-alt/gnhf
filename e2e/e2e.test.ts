@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it } from "vitest";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const distCliPath = join(repoRoot, "dist", "cli.mjs");
 const fixtureBinDir = join(repoRoot, "e2e", "fixtures");
+const windowsFixtureBinDir = join(fixtureBinDir, "windows");
 
 // Empty gitconfig pointed at by GIT_CONFIG_GLOBAL/GIT_CONFIG_SYSTEM so the
 // developer's real ~/.gitconfig (which may enable commit.gpgsign, set a
@@ -165,7 +166,10 @@ function createTestEnv(
     ...sanitizedGitEnv,
     HOME: home,
     USERPROFILE: home,
-    PATH: `${fixtureBinDir}${process.platform === "win32" ? ";" : ":"}${process.env.PATH ?? ""}`,
+    PATH:
+      process.platform === "win32"
+        ? `${windowsFixtureBinDir};${fixtureBinDir};${process.env.PATH ?? ""}`
+        : `${fixtureBinDir}:${process.env.PATH ?? ""}`,
     GNHF_MOCK_OPENCODE_LOG_PATH: mockLogPath,
   };
 }
@@ -399,6 +403,68 @@ describe("gnhf e2e", () => {
     expect(iterationEnd?.success).toBe(false);
   }, 30_000);
 
+  it.each([
+    {
+      label: "carried on stdout",
+      mode: "stdout-error",
+      expected:
+        "claude exited with code 1: Invalid model name: claude-nonexistent-5",
+    },
+    {
+      label: "with both streams empty",
+      mode: "no-output",
+      expected: "claude exited with code 1 and produced no output",
+    },
+  ])(
+    "surfaces the claude CLI's own failure text $label",
+    async ({ mode, expected }) => {
+      const cwd = createRepo();
+      tempDirs.push(cwd);
+      const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+      tempDirs.push(logDir);
+      const mockLogPath = join(logDir, "mock-opencode.jsonl");
+
+      const result = await runCli(
+        cwd,
+        [
+          "break the build",
+          "--agent",
+          "claude",
+          "--max-iterations",
+          "1",
+          "--prevent-sleep",
+          "off",
+        ],
+        {
+          env: {
+            ...createTestEnv(mockLogPath, tempDirs),
+            GNHF_MOCK_CLAUDE_MODE: mode,
+          },
+        },
+      );
+
+      expect(result.code).toBe(0);
+
+      const debugLogPath = findRunLogPath(cwd);
+      const agentRunErrorEntry = readJsonLines(debugLogPath).find(
+        (entry) => entry.event === "agent:run:error",
+      );
+      expect(agentRunErrorEntry).toBeDefined();
+      const agentError = agentRunErrorEntry?.error as
+        | { message?: string }
+        | undefined;
+      expect(agentError?.message).toBe(expected);
+
+      // The morning-after trace: notes.md is what the user actually reads.
+      const notes = readFileSync(
+        join(dirname(debugLogPath), "notes.md"),
+        "utf-8",
+      );
+      expect(notes).toContain(`[ERROR] ${expected}`);
+    },
+    30_000,
+  );
+
   it("reads the objective from stdin", async () => {
     const cwd = createRepo();
     tempDirs.push(cwd);
@@ -517,6 +583,94 @@ describe("gnhf e2e", () => {
 
       // Stderr should mention that the worktree was preserved
       expect(result.stderr).toContain("worktree preserved");
+    },
+    30_000,
+  );
+
+  it.skipIf(process.platform !== "linux")(
+    "preserves a committed worktree after Linux sleep-prevention re-exec",
+    async () => {
+      const cwd = createRepo();
+      tempDirs.push(cwd);
+      const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+      tempDirs.push(logDir);
+      const mockLogPath = join(logDir, "mock-opencode.jsonl");
+      const worktreeParent = `${cwd}-gnhf-worktrees`;
+      tempDirs.push(worktreeParent);
+      const fakeBinDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-bin-"));
+      tempDirs.push(fakeBinDir);
+      // Records the pid it hands to gnhf, then execs so that pid IS the
+      // re-execed gnhf process. Comparing it against the pid stamped on the
+      // run log's run:start event proves the re-exec actually happened
+      // instead of the whole run staying in one process.
+      const markerPath = join(logDir, "inhibitor-invocations");
+      const inhibitorPath = join(fakeBinDir, "systemd-inhibit");
+      writeFileSync(
+        inhibitorPath,
+        [
+          "#!/usr/bin/env sh",
+          `echo "$$" >> "${markerPath}"`,
+          "while [ $# -gt 0 ]; do",
+          '  case "$1" in',
+          "    --*) shift ;;",
+          "    *) break ;;",
+          "  esac",
+          "done",
+          'exec "$@"',
+          "",
+        ].join("\n"),
+        "utf-8",
+      );
+      chmodSync(inhibitorPath, 0o755);
+
+      const env = createTestEnv(mockLogPath, tempDirs);
+      env.PATH = `${fakeBinDir}:${env.PATH ?? ""}`;
+
+      const result = await runCli(
+        cwd,
+        [
+          "linux reexec worktree",
+          "--agent",
+          "opencode",
+          "--max-iterations",
+          "1",
+          "--worktree",
+        ],
+        { env },
+      );
+
+      expect(result.code).toBe(0);
+      expect(result.stderr).toContain("worktree preserved");
+      const worktreeDirs = readdirSync(worktreeParent);
+      expect(worktreeDirs).toHaveLength(1);
+      const runId = worktreeDirs[0]!;
+      const worktreePath = join(worktreeParent, runId);
+      const runDir = join(worktreePath, ".gnhf", "runs", runId);
+      const logFilePath = join(runDir, "gnhf.log");
+      expect(existsSync(join(runDir, "notes.md"))).toBe(true);
+      expect(existsSync(logFilePath)).toBe(true);
+
+      // The inhibitor ran exactly once (the child must not re-exec again),
+      // and the run that produced this worktree ran inside that exec.
+      expect(existsSync(markerPath)).toBe(true);
+      const inhibitedPids = readFileSync(markerPath, "utf-8")
+        .split("\n")
+        .filter(Boolean);
+      expect(inhibitedPids).toHaveLength(1);
+      const startEvents = readJsonLines(logFilePath).filter(
+        (entry) => entry.event === "run:start",
+      );
+      expect(startEvents).toHaveLength(1);
+      expect(String(startEvents[0]!.pid)).toBe(inhibitedPids[0]);
+
+      // The committed work itself survived, not just the run metadata.
+      expect(git(["rev-parse", "--abbrev-ref", "HEAD"], worktreePath)).toMatch(
+        /^gnhf\//,
+      );
+      expect(git(["rev-list", "--count", "HEAD"], worktreePath)).toBe("2");
+      expect(git(["log", "-1", "--format=%s"], worktreePath)).toContain(
+        "gnhf 1:",
+      );
     },
     30_000,
   );
