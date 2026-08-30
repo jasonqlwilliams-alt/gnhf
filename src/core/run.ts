@@ -1,10 +1,6 @@
 import {
-  closeSync,
   cpSync,
   mkdirSync,
-  mkdtempSync,
-  openSync,
-  renameSync,
   writeFileSync,
   appendFileSync,
   readFileSync,
@@ -12,7 +8,7 @@ import {
   existsSync,
   rmSync,
 } from "node:fs";
-import { basename, join, dirname, isAbsolute, resolve } from "node:path";
+import { basename, join, dirname, isAbsolute } from "node:path";
 import { execFileSync } from "node:child_process";
 import {
   buildAgentOutputSchema,
@@ -57,82 +53,10 @@ function runIdWithSuffix(runId: string, suffix: number): string {
   return suffix === 0 ? runId : `${runId}-${suffix}`;
 }
 
-function hasErrorCode(error: unknown, ...codes: string[]): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    typeof error.code === "string" &&
-    codes.includes(error.code)
-  );
-}
-
-interface RunIdLock {
-  fd: number;
-  path: string;
-}
-
-function runIdLockPath(runId: string, cwd: string): string {
-  return join(cwd, ".gnhf", "runs", `.${runId}.lock`);
-}
-
-function runIdReservationPath(runId: string, cwd: string): string {
-  return join(cwd, ".gnhf", "runs", `.${runId}.reserved`);
-}
-
-function readRunIdReservationOwner(runId: string, cwd: string): string | null {
-  const path = runIdReservationPath(runId, cwd);
-  if (!existsSync(path)) return null;
-  return readFileSync(path, "utf-8").trim();
-}
-
-function writeRunIdReservation(
-  runId: string,
-  cwd: string,
-  runDir: string,
-): string {
-  const path = runIdReservationPath(runId, cwd);
-  writeFileSync(path, `${resolve(runDir)}\n`, {
-    encoding: "utf-8",
-    flag: "wx",
-    mode: 0o600,
-  });
-  return path;
-}
-
-function isRunIdReserved(runId: string, cwd: string): boolean {
-  return (
-    existsSync(join(cwd, ".gnhf", "runs", runId)) ||
-    existsSync(runIdReservationPath(runId, cwd))
-  );
-}
-
-function tryAcquireRunIdLock(runId: string, cwd: string): RunIdLock | null {
-  mkdirSync(join(cwd, ".gnhf", "runs"), { recursive: true });
-  const path = runIdLockPath(runId, cwd);
-  try {
-    return { fd: openSync(path, "wx", 0o600), path };
-  } catch (error) {
-    if (hasErrorCode(error, "EEXIST")) return null;
-    throw error;
-  }
-}
-
-function releaseRunIdLock(lock: RunIdLock): void {
-  try {
-    closeSync(lock.fd);
-  } finally {
-    rmSync(lock.path, { force: true });
-  }
-}
-
 export function createRunIdWithSuffix(runId: string, cwd: string): string {
   for (let suffix = 0; suffix < 100; suffix += 1) {
     const candidate = runIdWithSuffix(runId, suffix);
-    if (
-      !isRunIdReserved(candidate, cwd) &&
-      !existsSync(runIdLockPath(candidate, cwd))
-    ) {
+    if (!existsSync(join(cwd, ".gnhf", "runs", candidate))) {
       return candidate;
     }
   }
@@ -144,91 +68,46 @@ function rewriteArchivedNotes(
   originalRunId: string,
   archivedRunId: string,
 ): string {
-  if (archivedRunId === originalRunId) return notes;
-  const notesLines = notes.split("\n");
-  if (notesLines[0] === `# gnhf run: ${originalRunId}`) {
-    notesLines[0] = `# gnhf run: ${archivedRunId}`;
-  }
-  if (
-    notesLines[2] === `Objective: see .gnhf/runs/${originalRunId}/prompt.md`
-  ) {
-    notesLines[2] = `Objective: see .gnhf/runs/${archivedRunId}/prompt.md`;
-  }
-  return notesLines.join("\n");
+  return notes
+    .replace(`# gnhf run: ${originalRunId}`, `# gnhf run: ${archivedRunId}`)
+    .replace(
+      `Objective: see .gnhf/runs/${originalRunId}/prompt.md`,
+      `Objective: see .gnhf/runs/${archivedRunId}/prompt.md`,
+    );
 }
 
 export function archiveRun(runInfo: RunInfo, repoRoot: string): RunInfo {
-  const runsDir = join(repoRoot, ".gnhf", "runs");
-  mkdirSync(runsDir, { recursive: true });
-  const stagingRunDir = mkdtempSync(join(runsDir, ".archive-"));
-  const stagingNotesPath = join(stagingRunDir, basename(runInfo.notesPath));
-  try {
-    cpSync(runInfo.runDir, stagingRunDir, { recursive: true });
-    const originalNotes = readFileSync(stagingNotesPath, "utf-8");
+  const archivedRunId = createRunIdWithSuffix(runInfo.runId, repoRoot);
+  const archivedRunDir = join(repoRoot, ".gnhf", "runs", archivedRunId);
+  mkdirSync(dirname(archivedRunDir), { recursive: true });
+  cpSync(runInfo.runDir, archivedRunDir, { recursive: true });
 
-    for (let suffix = 0; suffix < 100; suffix += 1) {
-      const archivedRunId = runIdWithSuffix(runInfo.runId, suffix);
-      const archivedRunDir = join(runsDir, archivedRunId);
-      const lock = tryAcquireRunIdLock(archivedRunId, repoRoot);
-      if (!lock) continue;
-      try {
-        const reservationOwner = readRunIdReservationOwner(
-          archivedRunId,
-          repoRoot,
-        );
-        const ownsReservation =
-          reservationOwner !== null &&
-          resolve(reservationOwner) === resolve(runInfo.runDir);
-        if (existsSync(archivedRunDir)) {
-          if (ownsReservation) {
-            throw new Error(
-              `Reserved run id ${archivedRunId} already has an archive`,
-            );
-          }
-          continue;
-        }
-        if (reservationOwner !== null && !ownsReservation) continue;
-        writeFileSync(
-          stagingNotesPath,
-          rewriteArchivedNotes(originalNotes, runInfo.runId, archivedRunId),
-          "utf-8",
-        );
-        try {
-          renameSync(stagingRunDir, archivedRunDir);
-        } catch (error) {
-          if (hasErrorCode(error, "EEXIST", "ENOTEMPTY")) {
-            if (ownsReservation) throw error;
-            continue;
-          }
-          throw error;
-        }
-        if (ownsReservation) {
-          rmSync(runIdReservationPath(archivedRunId, repoRoot), {
-            force: true,
-          });
-        }
-        const archivedPath = (path: string) =>
-          join(archivedRunDir, basename(path));
-        return {
-          ...runInfo,
-          runId: archivedRunId,
-          runDir: archivedRunDir,
-          promptPath: archivedPath(runInfo.promptPath),
-          notesPath: archivedPath(runInfo.notesPath),
-          schemaPath: archivedPath(runInfo.schemaPath),
-          logPath: archivedPath(runInfo.logPath),
-          baseCommitPath: archivedPath(runInfo.baseCommitPath),
-          stopWhenPath: archivedPath(runInfo.stopWhenPath),
-          commitMessagePath: archivedPath(runInfo.commitMessagePath),
-        };
-      } finally {
-        releaseRunIdLock(lock);
-      }
-    }
-    throw new Error(`Unable to create a unique run id for ${runInfo.runId}`);
-  } finally {
-    rmSync(stagingRunDir, { recursive: true, force: true });
+  if (archivedRunId !== runInfo.runId) {
+    const archivedNotesPath = join(archivedRunDir, basename(runInfo.notesPath));
+    writeFileSync(
+      archivedNotesPath,
+      rewriteArchivedNotes(
+        readFileSync(archivedNotesPath, "utf-8"),
+        runInfo.runId,
+        archivedRunId,
+      ),
+      "utf-8",
+    );
   }
+
+  const archivedPath = (path: string) => join(archivedRunDir, basename(path));
+  return {
+    ...runInfo,
+    runId: archivedRunId,
+    runDir: archivedRunDir,
+    promptPath: archivedPath(runInfo.promptPath),
+    notesPath: archivedPath(runInfo.notesPath),
+    schemaPath: archivedPath(runInfo.schemaPath),
+    logPath: archivedPath(runInfo.logPath),
+    baseCommitPath: archivedPath(runInfo.baseCommitPath),
+    stopWhenPath: archivedPath(runInfo.stopWhenPath),
+    commitMessagePath: archivedPath(runInfo.commitMessagePath),
+  };
 }
 
 function writeSchemaFile(
@@ -424,66 +303,6 @@ export function setupRun(
   };
 }
 
-export function setupRunWithSuffix(
-  runId: string,
-  prompt: string,
-  baseCommit: string,
-  cwd: string,
-  schemaOptions: RunSchemaOptions,
-  prepareCandidate?: (candidateRunId: string) => boolean,
-  reservationCwd = cwd,
-  candidateCwdForRunId?: (candidateRunId: string) => string,
-): RunInfo {
-  for (let suffix = 0; suffix < 100; suffix += 1) {
-    const candidate = runIdWithSuffix(runId, suffix);
-    const candidateCwd = candidateCwdForRunId?.(candidate) ?? cwd;
-    const usesSeparateReservation =
-      resolve(reservationCwd) !== resolve(candidateCwd);
-    const lock = tryAcquireRunIdLock(candidate, reservationCwd);
-    if (!lock) continue;
-    let reservationPath: string | undefined;
-    let keepReservation = false;
-    try {
-      if (isRunIdReserved(candidate, reservationCwd)) continue;
-      if (
-        usesSeparateReservation &&
-        existsSync(join(candidateCwd, ".gnhf", "runs", candidate))
-      ) {
-        continue;
-      }
-      if (usesSeparateReservation) {
-        try {
-          reservationPath = writeRunIdReservation(
-            candidate,
-            reservationCwd,
-            join(candidateCwd, ".gnhf", "runs", candidate),
-          );
-        } catch (error) {
-          if (hasErrorCode(error, "EEXIST")) continue;
-          throw error;
-        }
-      }
-      if (prepareCandidate && !prepareCandidate(candidate)) continue;
-      keepReservation = prepareCandidate !== undefined;
-      const runInfo = setupRun(
-        candidate,
-        prompt,
-        baseCommit,
-        candidateCwd,
-        schemaOptions,
-      );
-      keepReservation = true;
-      return runInfo;
-    } finally {
-      if (reservationPath && !keepReservation) {
-        rmSync(reservationPath, { force: true });
-      }
-      releaseRunIdLock(lock);
-    }
-  }
-  throw new Error(`Unable to create a unique run id for ${runId}`);
-}
-
 export function resumeRun(
   runId: string,
   cwd: string,
@@ -534,21 +353,6 @@ export function resumeRun(
     commitMessagePath,
     commitMessage,
   };
-}
-
-export function resumeRunIfAvailable(
-  runId: string,
-  cwd: string,
-  schemaOptions: RunSchemaOptions,
-): RunInfo | null {
-  const lock = tryAcquireRunIdLock(runId, cwd);
-  if (!lock) return null;
-  try {
-    if (!existsSync(join(cwd, ".gnhf", "runs", runId))) return null;
-    return resumeRun(runId, cwd, schemaOptions);
-  } finally {
-    releaseRunIdLock(lock);
-  }
 }
 
 export function peekRunMetadata(runId: string, cwd: string): RunMetadata {

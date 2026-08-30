@@ -44,10 +44,9 @@ import {
   type RunInfo,
   type RunSchemaOptions,
   setupRun,
-  setupRunWithSuffix,
   resumeRun,
-  resumeRunIfAvailable,
   archiveRun,
+  createRunIdWithSuffix,
   peekRunMetadata,
   getLastIterationNumber,
 } from "./core/run.js";
@@ -244,25 +243,10 @@ function initializeNewBranch(
   schemaOptions: RunSchemaOptions,
 ): RunInfo {
   ensureCleanWorkingTree(cwd);
-  const repoRoot = getRepoRootDir(cwd);
   const baseCommit = getHeadCommit(cwd);
-  return setupRunWithSuffix(
-    promptRunId(prompt),
-    prompt,
-    baseCommit,
-    cwd,
-    schemaOptions,
-    (candidateRunId) => {
-      try {
-        createBranch(`gnhf/${candidateRunId}`, cwd);
-        return true;
-      } catch (error) {
-        if (!isCollisionError(error)) throw error;
-        return false;
-      }
-    },
-    repoRoot,
-  );
+  const branchName = createBranchWithSuffix(slugifyPrompt(prompt), cwd);
+  const runId = branchName.split("/")[1]!;
+  return setupRun(runId, prompt, baseCommit, cwd, schemaOptions);
 }
 
 function promptRunId(prompt: string): string {
@@ -275,8 +259,11 @@ function resumeCurrentBranchRun(
   schemaOptions: RunSchemaOptions,
 ): RunInfo | null {
   const runId = promptRunId(prompt);
+  if (!existsSync(join(cwd, ".gnhf", "runs", runId))) {
+    return null;
+  }
   ensureCleanWorkingTree(cwd);
-  return resumeRunIfAvailable(runId, cwd, schemaOptions);
+  return resumeRun(runId, cwd, schemaOptions);
 }
 
 function initializeCurrentBranchRun(
@@ -286,13 +273,8 @@ function initializeCurrentBranchRun(
 ): RunInfo {
   ensureCleanWorkingTree(cwd);
   const baseCommit = getHeadCommit(cwd);
-  return setupRunWithSuffix(
-    promptRunId(prompt),
-    prompt,
-    baseCommit,
-    cwd,
-    schemaOptions,
-  );
+  const runId = createRunIdWithSuffix(promptRunId(prompt), cwd);
+  return setupRun(runId, prompt, baseCommit, cwd, schemaOptions);
 }
 
 function branchNameWithSuffix(branchName: string, suffix: number): string {
@@ -302,6 +284,19 @@ function branchNameWithSuffix(branchName: string, suffix: number): string {
 function isCollisionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /already exists|exists already|would be overwritten/i.test(message);
+}
+
+function createBranchWithSuffix(branchName: string, cwd: string): string {
+  for (let suffix = 0; suffix < 100; suffix += 1) {
+    const candidate = branchNameWithSuffix(branchName, suffix);
+    try {
+      createBranch(candidate, cwd);
+      return candidate;
+    } catch (error) {
+      if (!isCollisionError(error)) throw error;
+    }
+  }
+  throw new Error(`Unable to create a unique branch name for ${branchName}`);
 }
 
 interface WorktreeRunResult {
@@ -376,6 +371,8 @@ function initializeWorktreeRun(
     };
   };
 
+  let createdBranchName = branchName;
+  let createdRunId = runId;
   let createdWorktreePath = worktreePath;
   for (let suffix = 0; suffix < 100; suffix += 1) {
     const candidateBranchName = branchNameWithSuffix(branchName, suffix);
@@ -388,24 +385,32 @@ function initializeWorktreeRun(
     );
     if (resumed) return resumed;
   }
-  const runInfo = setupRunWithSuffix(
-    runId,
+  for (let suffix = 0; suffix < 100; suffix += 1) {
+    createdBranchName = branchNameWithSuffix(branchName, suffix);
+    createdRunId = createdBranchName.split("/")[1]!;
+    createdWorktreePath = makeWorktreePath(createdRunId);
+    const resumed = resumePreservedWorktree(
+      createdBranchName,
+      createdRunId,
+      createdWorktreePath,
+    );
+    if (resumed) return resumed;
+    try {
+      createWorktree(repoRoot, createdWorktreePath, createdBranchName);
+      break;
+    } catch (error) {
+      if (!isCollisionError(error)) throw error;
+      if (suffix === 99) {
+        throw new Error(`Unable to create a unique worktree for ${branchName}`);
+      }
+    }
+  }
+  const runInfo = setupRun(
+    createdRunId,
     prompt,
     baseCommit,
-    worktreePath,
+    createdWorktreePath,
     schemaOptions,
-    (candidateRunId) => {
-      createdWorktreePath = makeWorktreePath(candidateRunId);
-      try {
-        createWorktree(repoRoot, createdWorktreePath, `gnhf/${candidateRunId}`);
-        return true;
-      } catch (error) {
-        if (!isCollisionError(error)) throw error;
-        return false;
-      }
-    },
-    repoRoot,
-    makeWorktreePath,
   );
   return {
     runInfo,
@@ -1215,7 +1220,7 @@ program
               `\n  gnhf: worktree preserved at ${worktreePath}` +
                 `\n  gnhf: merge the branch and remove with: git worktree remove "${worktreePath}"\n`,
             );
-          } else {
+          } else if (worktreeCleanup) {
             const cleanup = worktreeCleanup;
             worktreeCleanup = null;
             if (!originatingRepoRoot) {
@@ -1223,7 +1228,7 @@ program
             }
             runInfo = archiveRun(runInfo, originatingRepoRoot);
             initDebugLog(runInfo.logPath);
-            cleanup?.();
+            cleanup();
             appendDebugLog("worktree:cleaned-up", {
               worktreePath,
               archivedRunDir: runInfo.runDir,
