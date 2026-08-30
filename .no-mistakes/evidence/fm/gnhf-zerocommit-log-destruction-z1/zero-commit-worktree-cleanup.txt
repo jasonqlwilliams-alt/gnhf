@@ -1,0 +1,27 @@
+Zero-commit --worktree cleanup evidence
+
+Invocation:
+  cwd: /tmp/gnhf-zero-commit-evidence-me5Qjm/packages/app
+  command: node dist/cli.mjs "zero commit cleanup" --agent opencode --max-iterations 0 --worktree --prevent-sleep off
+
+Permanent CLI summary excerpt:
+  gnhf: Run log: /tmp/gnhf-zero-commit-evidence-me5Qjm/.gnhf/runs/zero-commit-cleanup-fbf0f2-1/gnhf.log
+  notes           /tmp/gnhf-zero-commit-evidence-me5Qjm/.gnhf/runs/zero-commit-cleanup-fbf0f2-1/notes.md
+  debug log       /tmp/gnhf-zero-commit-evidence-me5Qjm/.gnhf/runs/zero-commit-cleanup-fbf0f2-1/gnhf.log
+
+Persisted state after the CLI exited:
+  archive_dir: /tmp/gnhf-zero-commit-evidence-me5Qjm/.gnhf/runs/zero-commit-cleanup-fbf0f2-1
+  archive_files: base-commit,commit-message,gnhf.log,notes.md,output-schema.json,prompt.md
+  printed_notes_readable: yes
+  printed_log_readable: yes
+  original_collision_preserved: yes
+  registered_worktrees_after_cleanup: 1 (the originating main checkout only)
+  debug_events: run:complete,worktree:cleaned-up
+
+Archived notes contract:
+  # gnhf run: zero-commit-cleanup-fbf0f2-1
+  Objective: see .gnhf/runs/zero-commit-cleanup-fbf0f2-1/prompt.md
+
+The run was invoked from a nested directory, the collision forced numeric suffixing,
+the complete record was archived under the repository root, the summary paths were
+readable after exit, and the empty temporary worktree was no longer registered.
