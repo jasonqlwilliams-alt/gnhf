@@ -244,6 +244,7 @@ function initializeNewBranch(
   schemaOptions: RunSchemaOptions,
 ): RunInfo {
   ensureCleanWorkingTree(cwd);
+  const repoRoot = getRepoRootDir(cwd);
   const baseCommit = getHeadCommit(cwd);
   return setupRunWithSuffix(
     promptRunId(prompt),
@@ -260,6 +261,7 @@ function initializeNewBranch(
         return false;
       }
     },
+    repoRoot,
   );
 }
 

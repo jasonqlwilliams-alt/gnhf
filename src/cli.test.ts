@@ -143,6 +143,7 @@ async function runCliWithMocks(
         cwd: string,
         schemaOptions: RunSchemaOptions,
         prepareCandidate?: (candidateRunId: string) => boolean,
+        _reservationCwd?: string,
       ) => {
         for (let suffix = 0; suffix < 100; suffix += 1) {
           const candidate = suffix === 0 ? runId : `${runId}-${suffix}`;

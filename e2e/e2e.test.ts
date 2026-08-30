@@ -892,15 +892,11 @@ describe("gnhf e2e", () => {
       "keep me\n",
     );
 
-    const archivedRunDir = join(
-      sourceRepoRoot,
-      ".gnhf",
-      "runs",
+    const archivedRunDir = join(sourceRepoRoot, ".gnhf", "runs", `${runId}-1`);
+    expect(readdirSync(join(sourceRepoRoot, ".gnhf", "runs")).sort()).toEqual([
+      runId,
       `${runId}-1`,
-    );
-    expect(
-      readdirSync(join(sourceRepoRoot, ".gnhf", "runs")).sort(),
-    ).toEqual([runId, `${runId}-1`]);
+    ]);
     expect(existsSync(join(invocationCwd, ".gnhf"))).toBe(false);
     const archivedFiles = readdirSync(archivedRunDir).sort();
     expect(archivedFiles).toEqual([
@@ -940,6 +936,70 @@ describe("gnhf e2e", () => {
     if (existsSync(worktreeParent)) {
       expect(readdirSync(worktreeParent)).toEqual([]);
     }
+  }, 30_000);
+
+  it("reserves nested new-branch run IDs at the repository root", async () => {
+    const sourceRepoRoot = createRepo();
+    tempDirs.push(sourceRepoRoot);
+    const invocationCwd = join(sourceRepoRoot, "packages", "app");
+    mkdirSync(invocationCwd, { recursive: true });
+    writeFileSync(join(invocationCwd, "tracked.txt"), "nested\n", "utf-8");
+    git(["add", "packages/app/tracked.txt"], sourceRepoRoot);
+    git(["commit", "-m", "add nested directory"], sourceRepoRoot);
+
+    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    tempDirs.push(logDir);
+    const mockLogPath = join(logDir, "mock-opencode.jsonl");
+    const prompt = "nested collision";
+    const runId = `nested-collision-${createHash("sha256")
+      .update(prompt)
+      .digest("hex")
+      .slice(0, 6)}`;
+    const rootRunsDir = join(sourceRepoRoot, ".gnhf", "runs");
+    mkdirSync(rootRunsDir, { recursive: true });
+    writeFileSync(
+      join(sourceRepoRoot, ".git", "info", "exclude"),
+      ".gnhf/runs/\n",
+      "utf-8",
+    );
+    const rootRunDir = join(rootRunsDir, runId);
+    const archivedRunDir = join(rootRunsDir, `${runId}-1`);
+    mkdirSync(rootRunDir);
+    mkdirSync(archivedRunDir);
+    writeFileSync(join(rootRunDir, "record.txt"), "original\n", "utf-8");
+    writeFileSync(join(archivedRunDir, "record.txt"), "archived\n", "utf-8");
+    git(["branch", `gnhf/${runId}`], sourceRepoRoot);
+
+    const result = await runCli(
+      invocationCwd,
+      [prompt, "--agent", "opencode", "--max-iterations", "0"],
+      { env: createTestEnv(mockLogPath, tempDirs) },
+    );
+
+    const selectedRunId = `${runId}-2`;
+    const nestedRunDir = join(invocationCwd, ".gnhf", "runs", selectedRunId);
+    const reservationPath = join(rootRunsDir, `.${selectedRunId}.reserved`);
+    expect(result.code).toBe(0);
+    expect(git(["rev-parse", "--abbrev-ref", "HEAD"], sourceRepoRoot)).toBe(
+      `gnhf/${selectedRunId}`,
+    );
+    expect(readFileSync(join(rootRunDir, "record.txt"), "utf-8")).toBe(
+      "original\n",
+    );
+    expect(readFileSync(join(archivedRunDir, "record.txt"), "utf-8")).toBe(
+      "archived\n",
+    );
+    expect(existsSync(join(rootRunsDir, selectedRunId))).toBe(false);
+    expect(readFileSync(reservationPath, "utf-8")).toBe(`${nestedRunDir}\n`);
+    expect(readdirSync(nestedRunDir).sort()).toEqual([
+      "base-commit",
+      "commit-message",
+      "gnhf.log",
+      "notes.md",
+      "output-schema.json",
+      "prompt.md",
+    ]);
+    expect(readFileSync(join(nestedRunDir, "prompt.md"), "utf-8")).toBe(prompt);
   }, 30_000);
 
   // Windows has no POSIX signals; child.kill("SIGINT") force-terminates the
