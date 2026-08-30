@@ -144,11 +144,18 @@ async function runCliWithMocks(
         schemaOptions: RunSchemaOptions,
         prepareCandidate?: (candidateRunId: string) => boolean,
         _reservationCwd?: string,
+        candidateCwdForRunId?: (candidateRunId: string) => string,
       ) => {
         for (let suffix = 0; suffix < 100; suffix += 1) {
           const candidate = suffix === 0 ? runId : `${runId}-${suffix}`;
           if (prepareCandidate && !prepareCandidate(candidate)) continue;
-          return setupRun(candidate, prompt, baseCommit, cwd, schemaOptions);
+          return setupRun(
+            candidate,
+            prompt,
+            baseCommit,
+            candidateCwdForRunId?.(candidate) ?? cwd,
+            schemaOptions,
+          );
         }
         throw new Error(`Unable to create a unique run id for ${runId}`);
       },

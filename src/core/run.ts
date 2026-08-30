@@ -80,6 +80,26 @@ function runIdReservationPath(runId: string, cwd: string): string {
   return join(cwd, ".gnhf", "runs", `.${runId}.reserved`);
 }
 
+function readRunIdReservationOwner(runId: string, cwd: string): string | null {
+  const path = runIdReservationPath(runId, cwd);
+  if (!existsSync(path)) return null;
+  return readFileSync(path, "utf-8").trim();
+}
+
+function writeRunIdReservation(
+  runId: string,
+  cwd: string,
+  runDir: string,
+): string {
+  const path = runIdReservationPath(runId, cwd);
+  writeFileSync(path, `${resolve(runDir)}\n`, {
+    encoding: "utf-8",
+    flag: "wx",
+    mode: 0o600,
+  });
+  return path;
+}
+
 function isRunIdReserved(runId: string, cwd: string): boolean {
   return (
     existsSync(join(cwd, ".gnhf", "runs", runId)) ||
@@ -152,7 +172,22 @@ export function archiveRun(runInfo: RunInfo, repoRoot: string): RunInfo {
       const lock = tryAcquireRunIdLock(archivedRunId, repoRoot);
       if (!lock) continue;
       try {
-        if (isRunIdReserved(archivedRunId, repoRoot)) continue;
+        const reservationOwner = readRunIdReservationOwner(
+          archivedRunId,
+          repoRoot,
+        );
+        const ownsReservation =
+          reservationOwner !== null &&
+          resolve(reservationOwner) === resolve(runInfo.runDir);
+        if (existsSync(archivedRunDir)) {
+          if (ownsReservation) {
+            throw new Error(
+              `Reserved run id ${archivedRunId} already has an archive`,
+            );
+          }
+          continue;
+        }
+        if (reservationOwner !== null && !ownsReservation) continue;
         writeFileSync(
           stagingNotesPath,
           rewriteArchivedNotes(originalNotes, runInfo.runId, archivedRunId),
@@ -161,8 +196,16 @@ export function archiveRun(runInfo: RunInfo, repoRoot: string): RunInfo {
         try {
           renameSync(stagingRunDir, archivedRunDir);
         } catch (error) {
-          if (hasErrorCode(error, "EEXIST", "ENOTEMPTY")) continue;
+          if (hasErrorCode(error, "EEXIST", "ENOTEMPTY")) {
+            if (ownsReservation) throw error;
+            continue;
+          }
           throw error;
+        }
+        if (ownsReservation) {
+          rmSync(runIdReservationPath(archivedRunId, repoRoot), {
+            force: true,
+          });
         }
         const archivedPath = (path: string) =>
           join(archivedRunDir, basename(path));
@@ -389,10 +432,13 @@ export function setupRunWithSuffix(
   schemaOptions: RunSchemaOptions,
   prepareCandidate?: (candidateRunId: string) => boolean,
   reservationCwd = cwd,
+  candidateCwdForRunId?: (candidateRunId: string) => string,
 ): RunInfo {
-  const usesSeparateReservation = resolve(reservationCwd) !== resolve(cwd);
   for (let suffix = 0; suffix < 100; suffix += 1) {
     const candidate = runIdWithSuffix(runId, suffix);
+    const candidateCwd = candidateCwdForRunId?.(candidate) ?? cwd;
+    const usesSeparateReservation =
+      resolve(reservationCwd) !== resolve(candidateCwd);
     const lock = tryAcquireRunIdLock(candidate, reservationCwd);
     if (!lock) continue;
     let reservationPath: string | undefined;
@@ -401,17 +447,16 @@ export function setupRunWithSuffix(
       if (isRunIdReserved(candidate, reservationCwd)) continue;
       if (
         usesSeparateReservation &&
-        existsSync(join(cwd, ".gnhf", "runs", candidate))
+        existsSync(join(candidateCwd, ".gnhf", "runs", candidate))
       ) {
         continue;
       }
       if (usesSeparateReservation) {
-        reservationPath = runIdReservationPath(candidate, reservationCwd);
         try {
-          writeFileSync(
-            reservationPath,
-            `${join(cwd, ".gnhf", "runs", candidate)}\n`,
-            { encoding: "utf-8", flag: "wx", mode: 0o600 },
+          reservationPath = writeRunIdReservation(
+            candidate,
+            reservationCwd,
+            join(candidateCwd, ".gnhf", "runs", candidate),
           );
         } catch (error) {
           if (hasErrorCode(error, "EEXIST")) continue;
@@ -424,7 +469,7 @@ export function setupRunWithSuffix(
         candidate,
         prompt,
         baseCommit,
-        cwd,
+        candidateCwd,
         schemaOptions,
       );
       keepReservation = true;

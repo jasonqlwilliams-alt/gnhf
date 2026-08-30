@@ -938,6 +938,98 @@ describe("gnhf e2e", () => {
     }
   }, 30_000);
 
+  it("keeps repeated worktree branches coupled to distinct archives", async () => {
+    const sourceRepoRoot = createRepo();
+    tempDirs.push(sourceRepoRoot);
+    const worktreeParent = `${sourceRepoRoot}-gnhf-worktrees`;
+    tempDirs.push(worktreeParent);
+    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    tempDirs.push(logDir);
+    const mockLogPath = join(logDir, "mock-opencode.jsonl");
+    const prompt = "repeat worktree";
+    const runId = `repeat-worktree-${createHash("sha256")
+      .update(prompt)
+      .digest("hex")
+      .slice(0, 6)}`;
+    const rootRunsDir = join(sourceRepoRoot, ".gnhf", "runs");
+    mkdirSync(rootRunsDir, { recursive: true });
+    writeFileSync(
+      join(sourceRepoRoot, ".git", "info", "exclude"),
+      ".gnhf/runs/\n",
+      "utf-8",
+    );
+    const collidingRunDir = join(rootRunsDir, runId);
+    mkdirSync(collidingRunDir);
+    writeFileSync(join(collidingRunDir, "record.txt"), "existing\n", "utf-8");
+
+    const firstBaseCommit = git(["rev-parse", "HEAD"], sourceRepoRoot);
+    const first = await runCli(
+      sourceRepoRoot,
+      [prompt, "--agent", "opencode", "--max-iterations", "0", "--worktree"],
+      { env: createTestEnv(mockLogPath, tempDirs) },
+    );
+
+    const firstRunId = `${runId}-1`;
+    const firstArchiveDir = join(rootRunsDir, firstRunId);
+    expect(first.code).toBe(0);
+    expect(git(["rev-parse", `gnhf/${firstRunId}`], sourceRepoRoot)).toBe(
+      firstBaseCommit,
+    );
+    expect(
+      readFileSync(join(firstArchiveDir, "base-commit"), "utf-8").trim(),
+    ).toBe(firstBaseCommit);
+    expect(existsSync(join(rootRunsDir, `.${firstRunId}.reserved`))).toBe(
+      false,
+    );
+
+    writeFileSync(
+      join(sourceRepoRoot, "README.md"),
+      "# fixture two\n",
+      "utf-8",
+    );
+    git(["add", "README.md"], sourceRepoRoot);
+    git(["commit", "-m", "advance main"], sourceRepoRoot);
+    const secondBaseCommit = git(["rev-parse", "HEAD"], sourceRepoRoot);
+    const second = await runCli(
+      sourceRepoRoot,
+      [prompt, "--agent", "opencode", "--max-iterations", "0", "--worktree"],
+      { env: createTestEnv(mockLogPath, tempDirs) },
+    );
+
+    const secondRunId = `${runId}-2`;
+    const secondArchiveDir = join(rootRunsDir, secondRunId);
+    expect(second.code).toBe(0);
+    expect(git(["rev-parse", `gnhf/${secondRunId}`], sourceRepoRoot)).toBe(
+      secondBaseCommit,
+    );
+    expect(
+      readFileSync(join(secondArchiveDir, "base-commit"), "utf-8").trim(),
+    ).toBe(secondBaseCommit);
+    expect(existsSync(join(rootRunsDir, `.${secondRunId}.reserved`))).toBe(
+      false,
+    );
+    expect(readdirSync(rootRunsDir).sort()).toEqual([
+      runId,
+      firstRunId,
+      secondRunId,
+    ]);
+
+    git(["checkout", `gnhf/${firstRunId}`], sourceRepoRoot);
+    const resumed = await runCli(
+      sourceRepoRoot,
+      [prompt, "--agent", "opencode", "--max-iterations", "0"],
+      { env: createTestEnv(mockLogPath, tempDirs) },
+    );
+    expect(resumed.code).toBe(0);
+    expect(git(["rev-parse", "HEAD"], sourceRepoRoot)).toBe(firstBaseCommit);
+    expect(
+      readFileSync(join(firstArchiveDir, "base-commit"), "utf-8").trim(),
+    ).toBe(firstBaseCommit);
+    expect(
+      readFileSync(join(secondArchiveDir, "base-commit"), "utf-8").trim(),
+    ).toBe(secondBaseCommit);
+  }, 30_000);
+
   it("reserves nested new-branch run IDs at the repository root", async () => {
     const sourceRepoRoot = createRepo();
     tempDirs.push(sourceRepoRoot);

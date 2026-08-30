@@ -376,8 +376,6 @@ function initializeWorktreeRun(
     };
   };
 
-  let createdBranchName = branchName;
-  let createdRunId = runId;
   let createdWorktreePath = worktreePath;
   for (let suffix = 0; suffix < 100; suffix += 1) {
     const candidateBranchName = branchNameWithSuffix(branchName, suffix);
@@ -390,32 +388,24 @@ function initializeWorktreeRun(
     );
     if (resumed) return resumed;
   }
-  for (let suffix = 0; suffix < 100; suffix += 1) {
-    createdBranchName = branchNameWithSuffix(branchName, suffix);
-    createdRunId = createdBranchName.split("/")[1]!;
-    createdWorktreePath = makeWorktreePath(createdRunId);
-    const resumed = resumePreservedWorktree(
-      createdBranchName,
-      createdRunId,
-      createdWorktreePath,
-    );
-    if (resumed) return resumed;
-    try {
-      createWorktree(repoRoot, createdWorktreePath, createdBranchName);
-      break;
-    } catch (error) {
-      if (!isCollisionError(error)) throw error;
-      if (suffix === 99) {
-        throw new Error(`Unable to create a unique worktree for ${branchName}`);
-      }
-    }
-  }
-  const runInfo = setupRun(
-    createdRunId,
+  const runInfo = setupRunWithSuffix(
+    runId,
     prompt,
     baseCommit,
-    createdWorktreePath,
+    worktreePath,
     schemaOptions,
+    (candidateRunId) => {
+      createdWorktreePath = makeWorktreePath(candidateRunId);
+      try {
+        createWorktree(repoRoot, createdWorktreePath, `gnhf/${candidateRunId}`);
+        return true;
+      } catch (error) {
+        if (!isCollisionError(error)) throw error;
+        return false;
+      }
+    },
+    repoRoot,
+    makeWorktreePath,
   );
   return {
     runInfo,
