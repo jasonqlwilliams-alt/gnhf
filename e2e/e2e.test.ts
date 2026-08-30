@@ -938,6 +938,162 @@ describe("gnhf e2e", () => {
     }
   }, 30_000);
 
+  it("keeps repeated worktree branches coupled to distinct archives", async () => {
+    const sourceRepoRoot = createRepo();
+    tempDirs.push(sourceRepoRoot);
+    const worktreeParent = `${sourceRepoRoot}-gnhf-worktrees`;
+    tempDirs.push(worktreeParent);
+    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    tempDirs.push(logDir);
+    const mockLogPath = join(logDir, "mock-opencode.jsonl");
+    const prompt = "repeat worktree";
+    const runId = `repeat-worktree-${createHash("sha256")
+      .update(prompt)
+      .digest("hex")
+      .slice(0, 6)}`;
+    const rootRunsDir = join(sourceRepoRoot, ".gnhf", "runs");
+    mkdirSync(rootRunsDir, { recursive: true });
+    writeFileSync(
+      join(sourceRepoRoot, ".git", "info", "exclude"),
+      ".gnhf/runs/\n",
+      "utf-8",
+    );
+    const collidingRunDir = join(rootRunsDir, runId);
+    mkdirSync(collidingRunDir);
+    writeFileSync(join(collidingRunDir, "record.txt"), "existing\n", "utf-8");
+
+    const firstBaseCommit = git(["rev-parse", "HEAD"], sourceRepoRoot);
+    const first = await runCli(
+      sourceRepoRoot,
+      [prompt, "--agent", "opencode", "--max-iterations", "0", "--worktree"],
+      { env: createTestEnv(mockLogPath, tempDirs) },
+    );
+
+    const firstRunId = `${runId}-1`;
+    const firstArchiveDir = join(rootRunsDir, firstRunId);
+    expect(first.code).toBe(0);
+    expect(git(["rev-parse", `gnhf/${firstRunId}`], sourceRepoRoot)).toBe(
+      firstBaseCommit,
+    );
+    expect(
+      readFileSync(join(firstArchiveDir, "base-commit"), "utf-8").trim(),
+    ).toBe(firstBaseCommit);
+    expect(existsSync(join(rootRunsDir, `.${firstRunId}.reserved`))).toBe(
+      false,
+    );
+
+    writeFileSync(
+      join(sourceRepoRoot, "README.md"),
+      "# fixture two\n",
+      "utf-8",
+    );
+    git(["add", "README.md"], sourceRepoRoot);
+    git(["commit", "-m", "advance main"], sourceRepoRoot);
+    const secondBaseCommit = git(["rev-parse", "HEAD"], sourceRepoRoot);
+    const second = await runCli(
+      sourceRepoRoot,
+      [prompt, "--agent", "opencode", "--max-iterations", "0", "--worktree"],
+      { env: createTestEnv(mockLogPath, tempDirs) },
+    );
+
+    const secondRunId = `${runId}-2`;
+    const secondArchiveDir = join(rootRunsDir, secondRunId);
+    expect(second.code).toBe(0);
+    expect(git(["rev-parse", `gnhf/${secondRunId}`], sourceRepoRoot)).toBe(
+      secondBaseCommit,
+    );
+    expect(
+      readFileSync(join(secondArchiveDir, "base-commit"), "utf-8").trim(),
+    ).toBe(secondBaseCommit);
+    expect(existsSync(join(rootRunsDir, `.${secondRunId}.reserved`))).toBe(
+      false,
+    );
+    expect(readdirSync(rootRunsDir).sort()).toEqual([
+      runId,
+      firstRunId,
+      secondRunId,
+    ]);
+
+    git(["checkout", `gnhf/${firstRunId}`], sourceRepoRoot);
+    const resumed = await runCli(
+      sourceRepoRoot,
+      [prompt, "--agent", "opencode", "--max-iterations", "0"],
+      { env: createTestEnv(mockLogPath, tempDirs) },
+    );
+    expect(resumed.code).toBe(0);
+    expect(git(["rev-parse", "HEAD"], sourceRepoRoot)).toBe(firstBaseCommit);
+    expect(
+      readFileSync(join(firstArchiveDir, "base-commit"), "utf-8").trim(),
+    ).toBe(firstBaseCommit);
+    expect(
+      readFileSync(join(secondArchiveDir, "base-commit"), "utf-8").trim(),
+    ).toBe(secondBaseCommit);
+  }, 30_000);
+
+  it("reserves nested new-branch run IDs at the repository root", async () => {
+    const sourceRepoRoot = createRepo();
+    tempDirs.push(sourceRepoRoot);
+    const invocationCwd = join(sourceRepoRoot, "packages", "app");
+    mkdirSync(invocationCwd, { recursive: true });
+    writeFileSync(join(invocationCwd, "tracked.txt"), "nested\n", "utf-8");
+    git(["add", "packages/app/tracked.txt"], sourceRepoRoot);
+    git(["commit", "-m", "add nested directory"], sourceRepoRoot);
+
+    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    tempDirs.push(logDir);
+    const mockLogPath = join(logDir, "mock-opencode.jsonl");
+    const prompt = "nested collision";
+    const runId = `nested-collision-${createHash("sha256")
+      .update(prompt)
+      .digest("hex")
+      .slice(0, 6)}`;
+    const rootRunsDir = join(sourceRepoRoot, ".gnhf", "runs");
+    mkdirSync(rootRunsDir, { recursive: true });
+    writeFileSync(
+      join(sourceRepoRoot, ".git", "info", "exclude"),
+      ".gnhf/runs/\n",
+      "utf-8",
+    );
+    const rootRunDir = join(rootRunsDir, runId);
+    const archivedRunDir = join(rootRunsDir, `${runId}-1`);
+    mkdirSync(rootRunDir);
+    mkdirSync(archivedRunDir);
+    writeFileSync(join(rootRunDir, "record.txt"), "original\n", "utf-8");
+    writeFileSync(join(archivedRunDir, "record.txt"), "archived\n", "utf-8");
+    git(["branch", `gnhf/${runId}`], sourceRepoRoot);
+
+    const result = await runCli(
+      invocationCwd,
+      [prompt, "--agent", "opencode", "--max-iterations", "0"],
+      { env: createTestEnv(mockLogPath, tempDirs) },
+    );
+
+    const selectedRunId = `${runId}-2`;
+    const nestedRunDir = join(invocationCwd, ".gnhf", "runs", selectedRunId);
+    const reservationPath = join(rootRunsDir, `.${selectedRunId}.reserved`);
+    expect(result.code).toBe(0);
+    expect(git(["rev-parse", "--abbrev-ref", "HEAD"], sourceRepoRoot)).toBe(
+      `gnhf/${selectedRunId}`,
+    );
+    expect(readFileSync(join(rootRunDir, "record.txt"), "utf-8")).toBe(
+      "original\n",
+    );
+    expect(readFileSync(join(archivedRunDir, "record.txt"), "utf-8")).toBe(
+      "archived\n",
+    );
+    expect(existsSync(join(rootRunsDir, selectedRunId))).toBe(false);
+    expect(readFileSync(reservationPath, "utf-8")).toBe(`${nestedRunDir}\n`);
+    expect(readdirSync(nestedRunDir).sort()).toEqual([
+      "base-commit",
+      "commit-message",
+      "gnhf.log",
+      "notes.md",
+      "output-schema.json",
+      "prompt.md",
+    ]);
+    expect(readFileSync(join(nestedRunDir, "prompt.md"), "utf-8")).toBe(prompt);
+  }, 30_000);
+
   // Windows has no POSIX signals; child.kill("SIGINT") force-terminates the
   // process tree without triggering the graceful shutdown path this test covers.
   it.skipIf(process.platform === "win32")(

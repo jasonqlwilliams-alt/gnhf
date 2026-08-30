@@ -14,7 +14,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CONVENTIONAL_COMMIT_MESSAGE } from "./core/commit-message.js";
 import type { Config } from "./core/config.js";
 import { stripExitSummaryAnsi } from "./core/exit-summary.js";
-import type { RunInfo } from "./core/run.js";
+import type { RunInfo, RunSchemaOptions } from "./core/run.js";
 
 const TEST_AGENT_NAMES = [
   "claude",
@@ -68,8 +68,9 @@ interface CliMockOverrides {
   getBranchDiffStats?: ReturnType<typeof vi.fn>;
   peekRunMetadata?: ReturnType<typeof vi.fn>;
   resumeRun?: ReturnType<typeof vi.fn>;
+  resumeRunIfAvailable?: ReturnType<typeof vi.fn>;
   archiveRun?: ReturnType<typeof vi.fn>;
-  createRunIdWithSuffix?: ReturnType<typeof vi.fn>;
+  setupRunWithSuffix?: ReturnType<typeof vi.fn>;
   getLastIterationNumber?: ReturnType<typeof vi.fn>;
   orchestratorStart?: ReturnType<typeof vi.fn>;
   orchestratorGetState?: ReturnType<typeof vi.fn>;
@@ -126,13 +127,47 @@ async function runCliWithMocks(
   };
   let consoleErrorCalls: unknown[][] = [];
   let stdoutWriteCalls: unknown[][] = [];
-  const setupRun = vi.fn(() => stubRunInfo);
+  const setupRun = vi.fn<
+    (
+      runId: string,
+      prompt: string,
+      baseCommit: string,
+      cwd: string,
+      schemaOptions: RunSchemaOptions,
+    ) => RunInfo
+  >(() => stubRunInfo);
   const peekRunMetadata = overrides.peekRunMetadata ?? vi.fn(() => stubRunInfo);
   const resumeRun = overrides.resumeRun ?? vi.fn();
+  const resumeRunIfAvailable = overrides.resumeRunIfAvailable ?? resumeRun;
   const archiveRun =
     overrides.archiveRun ?? vi.fn((runInfo: RunInfo) => runInfo);
-  const createRunIdWithSuffix =
-    overrides.createRunIdWithSuffix ?? vi.fn((runId: string) => runId);
+  const setupRunWithSuffix =
+    overrides.setupRunWithSuffix ??
+    vi.fn(
+      (
+        runId: string,
+        prompt: string,
+        baseCommit: string,
+        cwd: string,
+        schemaOptions: RunSchemaOptions,
+        prepareCandidate?: (candidateRunId: string) => boolean,
+        _reservationCwd?: string,
+        candidateCwdForRunId?: (candidateRunId: string) => string,
+      ) => {
+        for (let suffix = 0; suffix < 100; suffix += 1) {
+          const candidate = suffix === 0 ? runId : `${runId}-${suffix}`;
+          if (prepareCandidate && !prepareCandidate(candidate)) continue;
+          return setupRun(
+            candidate,
+            prompt,
+            baseCommit,
+            candidateCwdForRunId?.(candidate) ?? cwd,
+            schemaOptions,
+          );
+        }
+        throw new Error(`Unable to create a unique run id for ${runId}`);
+      },
+    );
   const getLastIterationNumber =
     overrides.getLastIterationNumber ?? vi.fn(() => 0);
   const ensureCleanWorkingTree = overrides.ensureCleanWorkingTree ?? vi.fn();
@@ -211,10 +246,11 @@ async function runCliWithMocks(
   }));
   vi.doMock("./core/run.js", () => ({
     setupRun,
+    setupRunWithSuffix,
     peekRunMetadata,
     resumeRun,
+    resumeRunIfAvailable,
     archiveRun,
-    createRunIdWithSuffix,
     getLastIterationNumber,
   }));
   vi.doMock("./core/stdin.js", () => ({ readStdinText }));
@@ -307,10 +343,11 @@ async function runCliWithMocks(
     loadConfig,
     createAgent,
     setupRun,
+    setupRunWithSuffix,
     peekRunMetadata,
     resumeRun,
+    resumeRunIfAvailable,
     archiveRun,
-    createRunIdWithSuffix,
     getLastIterationNumber,
     orchestratorCtor,
     rendererCtor,
@@ -3227,7 +3264,7 @@ describe("cli", () => {
       })
       .mockImplementationOnce(() => {});
 
-    await runCliWithMocks(
+    const { setupRun } = await runCliWithMocks(
       ["ship it"],
       {
         agent: "claude",
@@ -3243,6 +3280,9 @@ describe("cli", () => {
     const firstBranch = createBranch.mock.calls[0]?.[0] as string;
     expect(createBranch).toHaveBeenCalledTimes(2);
     expect(createBranch.mock.calls[1]?.[0]).toBe(`${firstBranch}-1`);
+    expect(createBranch.mock.calls[1]?.[0]).toBe(
+      `gnhf/${setupRun.mock.calls[0]?.[0] as string}`,
+    );
   });
 
   it("suffixes worktree branch and path when the generated worktree collides", async () => {

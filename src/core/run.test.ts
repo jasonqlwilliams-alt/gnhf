@@ -2,8 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { join } from "node:path";
 
 vi.mock("node:fs", () => ({
+  closeSync: vi.fn(),
   cpSync: vi.fn(),
   mkdirSync: vi.fn(),
+  mkdtempSync: vi.fn(() => "/project/.gnhf/runs/.archive-test"),
+  openSync: vi.fn(() => 1),
+  renameSync: vi.fn(),
   writeFileSync: vi.fn(),
   appendFileSync: vi.fn(),
   readFileSync: vi.fn(() => ""),

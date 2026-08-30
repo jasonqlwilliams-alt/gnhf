@@ -159,7 +159,7 @@ After installing from npm, the skill is available under the installed package di
 - **Exit summary** - after shutdown cleanup, gnhf prints a permanent stdout summary with the final branch, elapsed time, iteration and token totals, branch diff stats, notes/debug-log paths, and review commands
 - **Shared memory** - the agent reads `notes.md` (built up from prior iterations) to communicate across iterations
 - **Local run metadata** - gnhf stores prompt, notes, stop conditions, and commit-message convention metadata under `.gnhf/runs/` and ignores it locally, so your branch only contains intentional work
-- **Resume support** - run `gnhf` while on an existing `gnhf/` branch to pick up where a previous run left off; if you provide a different prompt, gnhf asks whether to update the saved prompt and continue with the existing history, start a new branch, or quit. New runs whose generated branch already exists use a numeric suffix such as `gnhf/<slug>-1`.
+- **Resume support** - run `gnhf` while on an existing `gnhf/` branch to pick up where a previous run left off; if you provide a different prompt, gnhf asks whether to update the saved prompt and continue with the existing history, start a new branch, or quit. New branch runs whose generated branch or repository-root run ID is unavailable use a numeric suffix such as `gnhf/<slug>-1`.
 
 ### Live Branch Mode
 
@@ -186,7 +186,7 @@ Pass `--worktree` to run each agent in an isolated [git worktree](https://git-sc
 
 - Worktrees with commits are **preserved** after the run so you can review, merge, or cherry-pick the work. gnhf prints the path and cleanup command.
 - Re-running the same prompt with `--worktree` resumes a preserved matching worktree when possible; otherwise gnhf creates a suffixed worktree such as `<run-slug>-1` if the original name is unavailable.
-- Worktrees with **no commits** are automatically removed on exit unless a pending commit failure left uncommitted work to inspect or repair.
+- Newly created worktrees with **no commits** are automatically removed on exit unless a pending commit failure left uncommitted work to inspect or repair. Before removing one, gnhf archives its complete run record under the originating repository root's `.gnhf/runs/` directory, adding a numeric suffix on collisions, so the exit summary's notes and debug-log paths remain valid.
 - Known limitation: on Linux, when sleep prevention re-execs gnhf under `systemd-inhibit`, a worktree with no commits is left in place instead of being removed; remove it manually with `git worktree remove`. Tracked as `gnhf-reexec-worktree-leak-l1`.
 - `--worktree` must be run from a non-gnhf branch (typically `main`).
 
