@@ -14,7 +14,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CONVENTIONAL_COMMIT_MESSAGE } from "./core/commit-message.js";
 import type { Config } from "./core/config.js";
 import { stripExitSummaryAnsi } from "./core/exit-summary.js";
-import type { RunInfo } from "./core/run.js";
+import type { RunInfo, RunSchemaOptions } from "./core/run.js";
 
 const TEST_AGENT_NAMES = [
   "claude",
@@ -133,7 +133,25 @@ async function runCliWithMocks(
   const resumeRunIfAvailable = overrides.resumeRunIfAvailable ?? resumeRun;
   const archiveRun =
     overrides.archiveRun ?? vi.fn((runInfo: RunInfo) => runInfo);
-  const setupRunWithSuffix = overrides.setupRunWithSuffix ?? setupRun;
+  const setupRunWithSuffix =
+    overrides.setupRunWithSuffix ??
+    vi.fn(
+      (
+        runId: string,
+        prompt: string,
+        baseCommit: string,
+        cwd: string,
+        schemaOptions: RunSchemaOptions,
+        prepareCandidate?: (candidateRunId: string) => boolean,
+      ) => {
+        for (let suffix = 0; suffix < 100; suffix += 1) {
+          const candidate = suffix === 0 ? runId : `${runId}-${suffix}`;
+          if (prepareCandidate && !prepareCandidate(candidate)) continue;
+          return setupRun(candidate, prompt, baseCommit, cwd, schemaOptions);
+        }
+        throw new Error(`Unable to create a unique run id for ${runId}`);
+      },
+    );
   const getLastIterationNumber =
     overrides.getLastIterationNumber ?? vi.fn(() => 0);
   const ensureCleanWorkingTree = overrides.ensureCleanWorkingTree ?? vi.fn();
@@ -3230,7 +3248,7 @@ describe("cli", () => {
       })
       .mockImplementationOnce(() => {});
 
-    await runCliWithMocks(
+    const { setupRun } = await runCliWithMocks(
       ["ship it"],
       {
         agent: "claude",
@@ -3246,6 +3264,9 @@ describe("cli", () => {
     const firstBranch = createBranch.mock.calls[0]?.[0] as string;
     expect(createBranch).toHaveBeenCalledTimes(2);
     expect(createBranch.mock.calls[1]?.[0]).toBe(`${firstBranch}-1`);
+    expect(createBranch.mock.calls[1]?.[0]).toBe(
+      `gnhf/${setupRun.mock.calls[0]?.[0] as string}`,
+    );
   });
 
   it("suffixes worktree branch and path when the generated worktree collides", async () => {

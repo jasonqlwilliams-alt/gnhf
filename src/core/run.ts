@@ -376,6 +376,7 @@ export function setupRunWithSuffix(
   baseCommit: string,
   cwd: string,
   schemaOptions: RunSchemaOptions,
+  prepareCandidate?: (candidateRunId: string) => boolean,
 ): RunInfo {
   for (let suffix = 0; suffix < 100; suffix += 1) {
     const candidate = runIdWithSuffix(runId, suffix);
@@ -383,6 +384,7 @@ export function setupRunWithSuffix(
     if (!lock) continue;
     try {
       if (existsSync(join(cwd, ".gnhf", "runs", candidate))) continue;
+      if (prepareCandidate && !prepareCandidate(candidate)) continue;
       return setupRun(candidate, prompt, baseCommit, cwd, schemaOptions);
     } finally {
       releaseRunIdLock(lock);

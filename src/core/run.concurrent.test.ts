@@ -89,7 +89,18 @@ interface CurrentWorkerPayload {
   runId: string;
 }
 
-type WorkerPayload = ArchiveWorkerPayload | CurrentWorkerPayload;
+interface NewBranchWorkerPayload {
+  kind: "new-branch";
+  prompt: string;
+  repoRoot: string;
+  resultPath: string;
+  runId: string;
+}
+
+type WorkerPayload =
+  | ArchiveWorkerPayload
+  | CurrentWorkerPayload
+  | NewBranchWorkerPayload;
 
 interface ProcessResult {
   code: number | null;
@@ -390,6 +401,134 @@ describe("archiveRun concurrent collisions", () => {
     30_000,
   );
 
+  it.skipIf(workerPayloadPath !== undefined)(
+    "keeps a concurrent new branch coupled to its reserved run ID",
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), "gnhf-archive-branch-"));
+      tempDirs.push(root);
+      const repoRoot = join(root, "repo");
+      const runsDir = join(repoRoot, ".gnhf", "runs");
+      const resultDir = join(root, "results");
+      const publishReadyPath = join(root, "publish-ready");
+      const publishReleasePath = join(root, "publish-release");
+      mkdirSync(repoRoot, { recursive: true });
+      mkdirSync(resultDir, { recursive: true });
+      execFileSync("git", ["init", "-b", "main"], {
+        cwd: repoRoot,
+        stdio: "ignore",
+      });
+      execFileSync(
+        "git",
+        [
+          "-c",
+          "user.name=gnhf tests",
+          "-c",
+          "user.email=tests@example.com",
+          "commit",
+          "--allow-empty",
+          "-m",
+          "init",
+        ],
+        { cwd: repoRoot, stdio: "ignore" },
+      );
+
+      const runId = "concurrent-new-branch";
+      createSourceRun(runsDir, runId, runId);
+      execFileSync("git", ["branch", `gnhf/${runId}`], {
+        cwd: repoRoot,
+        stdio: "ignore",
+      });
+
+      const archiveResultPath = join(resultDir, "archive.json");
+      const archivePayloadPath = join(root, "archive.json");
+      const archivePayload: ArchiveWorkerPayload = {
+        kind: "archive",
+        repoRoot,
+        resultPath: archiveResultPath,
+        runInfo: createSourceRun(join(root, "sources"), runId, "archive"),
+      };
+      writeFileSync(
+        archivePayloadPath,
+        JSON.stringify(archivePayload),
+        "utf-8",
+      );
+
+      const archiveProcess = runWorker("archive", archivePayloadPath, {
+        GNHF_ARCHIVE_PUBLISH_READY: publishReadyPath,
+        GNHF_ARCHIVE_PUBLISH_RELEASE: publishReleasePath,
+      });
+      await waitForPath(publishReadyPath);
+
+      const branchResultPath = join(resultDir, "new-branch.json");
+      const branchPayloadPath = join(root, "new-branch.json");
+      const branchPayload: NewBranchWorkerPayload = {
+        kind: "new-branch",
+        prompt: "prompt-new-branch",
+        repoRoot,
+        resultPath: branchResultPath,
+        runId,
+      };
+      writeFileSync(branchPayloadPath, JSON.stringify(branchPayload), "utf-8");
+      let branchProcess: ProcessResult;
+      try {
+        branchProcess = await runWorker("new-branch", branchPayloadPath);
+      } finally {
+        writeFileSync(publishReleasePath, "", "utf-8");
+      }
+      expect(
+        branchProcess.code,
+        branchProcess.stdout + branchProcess.stderr,
+      ).toBe(0);
+
+      const archiveResult = await archiveProcess;
+      expect(
+        archiveResult.code,
+        archiveResult.stdout + archiveResult.stderr,
+      ).toBe(0);
+
+      const archivedRun = JSON.parse(
+        readFileSync(archiveResultPath, "utf-8"),
+      ) as RunInfo;
+      const branchRun = JSON.parse(
+        readFileSync(branchResultPath, "utf-8"),
+      ) as RunInfo;
+      expect(archivedRun.runId).toBe(`${runId}-1`);
+      expect(branchRun.runId).toBe(`${runId}-2`);
+      expect(
+        execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+          cwd: repoRoot,
+          encoding: "utf-8",
+        }).trim(),
+      ).toBe(`gnhf/${branchRun.runId}`);
+      expect(readdirSync(runsDir).sort()).toEqual([
+        runId,
+        `${runId}-1`,
+        `${runId}-2`,
+      ]);
+      expect(readFileSync(archivedRun.promptPath, "utf-8")).toBe(
+        "prompt-archive",
+      );
+      expect(readFileSync(branchRun.promptPath, "utf-8")).toBe(
+        "prompt-new-branch",
+      );
+      for (const runDir of [
+        join(runsDir, runId),
+        archivedRun.runDir,
+        branchRun.runDir,
+      ]) {
+        expect(readdirSync(runDir).sort()).toEqual([
+          "base-commit",
+          "commit-message",
+          "gnhf.log",
+          "notes.md",
+          "output-schema.json",
+          "prompt.md",
+        ]);
+      }
+    },
+    30_000,
+  );
+
   it.skipIf(workerPayloadPath === undefined)(
     "archives one synchronized worker record",
     () => {
@@ -399,7 +538,7 @@ describe("archiveRun concurrent collisions", () => {
       let run: RunInfo;
       if (payload.kind === "archive") {
         run = archiveRun(payload.runInfo, payload.repoRoot);
-      } else {
+      } else if (payload.kind === "current") {
         run =
           resumeRunIfAvailable(payload.runId, payload.repoRoot, {
             includeStopField: false,
@@ -411,9 +550,31 @@ describe("archiveRun concurrent collisions", () => {
             payload.repoRoot,
             { includeStopField: false },
           );
+      } else {
+        run = setupRunWithSuffix(
+          payload.runId,
+          payload.prompt,
+          "base-new-branch",
+          payload.repoRoot,
+          { includeStopField: false },
+          (candidateRunId) => {
+            try {
+              execFileSync(
+                "git",
+                ["checkout", "-b", `gnhf/${candidateRunId}`],
+                { cwd: payload.repoRoot, stdio: "ignore" },
+              );
+              return true;
+            } catch {
+              return false;
+            }
+          },
+        );
+      }
+      if (payload.kind !== "archive") {
         writeFileSync(
           run.logPath,
-          `${JSON.stringify({ event: "source", sourceId: "current" })}\n`,
+          `${JSON.stringify({ event: "source", sourceId: payload.kind })}\n`,
           "utf-8",
         );
       }

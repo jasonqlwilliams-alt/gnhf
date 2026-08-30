@@ -245,9 +245,22 @@ function initializeNewBranch(
 ): RunInfo {
   ensureCleanWorkingTree(cwd);
   const baseCommit = getHeadCommit(cwd);
-  const branchName = createBranchWithSuffix(slugifyPrompt(prompt), cwd);
-  const runId = branchName.split("/")[1]!;
-  return setupRun(runId, prompt, baseCommit, cwd, schemaOptions);
+  return setupRunWithSuffix(
+    promptRunId(prompt),
+    prompt,
+    baseCommit,
+    cwd,
+    schemaOptions,
+    (candidateRunId) => {
+      try {
+        createBranch(`gnhf/${candidateRunId}`, cwd);
+        return true;
+      } catch (error) {
+        if (!isCollisionError(error)) throw error;
+        return false;
+      }
+    },
+  );
 }
 
 function promptRunId(prompt: string): string {
@@ -287,19 +300,6 @@ function branchNameWithSuffix(branchName: string, suffix: number): string {
 function isCollisionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /already exists|exists already|would be overwritten/i.test(message);
-}
-
-function createBranchWithSuffix(branchName: string, cwd: string): string {
-  for (let suffix = 0; suffix < 100; suffix += 1) {
-    const candidate = branchNameWithSuffix(branchName, suffix);
-    try {
-      createBranch(candidate, cwd);
-      return candidate;
-    } catch (error) {
-      if (!isCollisionError(error)) throw error;
-    }
-  }
-  throw new Error(`Unable to create a unique branch name for ${branchName}`);
 }
 
 interface WorktreeRunResult {
