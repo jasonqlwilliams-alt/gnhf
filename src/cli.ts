@@ -44,9 +44,10 @@ import {
   type RunInfo,
   type RunSchemaOptions,
   setupRun,
+  setupRunWithSuffix,
   resumeRun,
+  resumeRunIfAvailable,
   archiveRun,
-  createRunIdWithSuffix,
   peekRunMetadata,
   getLastIterationNumber,
 } from "./core/run.js";
@@ -259,11 +260,8 @@ function resumeCurrentBranchRun(
   schemaOptions: RunSchemaOptions,
 ): RunInfo | null {
   const runId = promptRunId(prompt);
-  if (!existsSync(join(cwd, ".gnhf", "runs", runId))) {
-    return null;
-  }
   ensureCleanWorkingTree(cwd);
-  return resumeRun(runId, cwd, schemaOptions);
+  return resumeRunIfAvailable(runId, cwd, schemaOptions);
 }
 
 function initializeCurrentBranchRun(
@@ -273,8 +271,13 @@ function initializeCurrentBranchRun(
 ): RunInfo {
   ensureCleanWorkingTree(cwd);
   const baseCommit = getHeadCommit(cwd);
-  const runId = createRunIdWithSuffix(promptRunId(prompt), cwd);
-  return setupRun(runId, prompt, baseCommit, cwd, schemaOptions);
+  return setupRunWithSuffix(
+    promptRunId(prompt),
+    prompt,
+    baseCommit,
+    cwd,
+    schemaOptions,
+  );
 }
 
 function branchNameWithSuffix(branchName: string, suffix: number): string {

@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -32,7 +32,10 @@ vi.mock("node:fs", async (importOriginal) => {
       typeof options === "object" &&
       options?.recursive === true
     ) {
-      actual.writeFileSync(join(barrierDir, workerId), "", { flag: "wx" });
+      const markerPath = join(barrierDir, workerId);
+      if (!actual.existsSync(markerPath)) {
+        actual.writeFileSync(markerPath, "", { flag: "wx" });
+      }
       const deadline = Date.now() + 10_000;
       while (actual.readdirSync(barrierDir).length < 2) {
         if (Date.now() >= deadline) {
@@ -43,16 +46,50 @@ vi.mock("node:fs", async (importOriginal) => {
     }
     return Reflect.apply(actual.mkdirSync, undefined, [path, options]);
   }) as MkdirSync;
-  return { ...actual, mkdirSync: synchronizedMkdirSync };
+  type RenameSync = typeof actual.renameSync;
+  const synchronizedRenameSync = ((
+    oldPath: Parameters<RenameSync>[0],
+    newPath: Parameters<RenameSync>[1],
+  ) => {
+    const readyPath = process.env.GNHF_ARCHIVE_PUBLISH_READY;
+    const releasePath = process.env.GNHF_ARCHIVE_PUBLISH_RELEASE;
+    if (readyPath && releasePath && !actual.existsSync(readyPath)) {
+      actual.writeFileSync(readyPath, String(newPath), "utf-8");
+      const deadline = Date.now() + 10_000;
+      while (!actual.existsSync(releasePath)) {
+        if (Date.now() >= deadline) {
+          throw new Error("Timed out waiting to publish staged archive");
+        }
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+      }
+    }
+    return actual.renameSync(oldPath, newPath);
+  }) as RenameSync;
+  return {
+    ...actual,
+    mkdirSync: synchronizedMkdirSync,
+    renameSync: synchronizedRenameSync,
+  };
 });
 
-import { archiveRun } from "./run.js";
+import { archiveRun, resumeRunIfAvailable, setupRunWithSuffix } from "./run.js";
 
-interface WorkerPayload {
+interface ArchiveWorkerPayload {
+  kind: "archive";
   repoRoot: string;
   resultPath: string;
   runInfo: RunInfo;
 }
+
+interface CurrentWorkerPayload {
+  kind: "current";
+  prompt: string;
+  repoRoot: string;
+  resultPath: string;
+  runId: string;
+}
+
+type WorkerPayload = ArchiveWorkerPayload | CurrentWorkerPayload;
 
 interface ProcessResult {
   code: number | null;
@@ -103,11 +140,10 @@ function createSourceRun(
   };
 }
 
-function runArchiveWorker(
+function runWorker(
   workerId: string,
   payloadPath: string,
-  barrierDir: string,
-  runsDir: string,
+  workerEnv: NodeJS.ProcessEnv = {},
 ): Promise<ProcessResult> {
   return new Promise((resolveResult, reject) => {
     const child = spawn(
@@ -124,10 +160,9 @@ function runArchiveWorker(
         cwd: projectRoot,
         env: {
           ...process.env,
+          ...workerEnv,
           GNHF_ARCHIVE_WORKER_ID: workerId,
           GNHF_ARCHIVE_WORKER_PAYLOAD: payloadPath,
-          GNHF_ARCHIVE_BARRIER_DIR: barrierDir,
-          GNHF_ARCHIVE_RUNS_DIR: runsDir,
           NO_COLOR: "1",
         },
         stdio: ["ignore", "pipe", "pipe"],
@@ -146,6 +181,16 @@ function runArchiveWorker(
       resolveResult({ code, stdout, stderr });
     });
   });
+}
+
+async function waitForPath(path: string, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!existsSync(path)) {
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out waiting for ${path}`);
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+  }
 }
 
 afterEach(() => {
@@ -176,7 +221,8 @@ describe("archiveRun concurrent collisions", () => {
       const workers = ["alpha", "beta"].map((sourceId) => {
         const resultPath = join(resultDir, `${sourceId}.json`);
         const payloadPath = join(root, `${sourceId}.json`);
-        const payload: WorkerPayload = {
+        const payload: ArchiveWorkerPayload = {
+          kind: "archive",
           repoRoot,
           resultPath,
           runInfo: createSourceRun(
@@ -191,20 +237,19 @@ describe("archiveRun concurrent collisions", () => {
 
       const processResults = await Promise.all(
         workers.map(({ sourceId, payloadPath }) =>
-          runArchiveWorker(
-            sourceId,
-            payloadPath,
-            barrierDir,
-            runsDir,
-          ),
+          runWorker(sourceId, payloadPath, {
+            GNHF_ARCHIVE_BARRIER_DIR: barrierDir,
+            GNHF_ARCHIVE_RUNS_DIR: runsDir,
+          }),
         ),
       );
       for (const result of processResults) {
         expect(result.code, result.stdout + result.stderr).toBe(0);
       }
 
-      const archivedRuns = workers.map(({ resultPath }) =>
-        JSON.parse(readFileSync(resultPath, "utf-8")) as RunInfo,
+      const archivedRuns = workers.map(
+        ({ resultPath }) =>
+          JSON.parse(readFileSync(resultPath, "utf-8")) as RunInfo,
       );
       expect(archivedRuns.map(({ runId }) => runId).sort()).toEqual([
         "concurrent-archive-1",
@@ -242,19 +287,138 @@ describe("archiveRun concurrent collisions", () => {
     30_000,
   );
 
+  it.skipIf(workerPayloadPath !== undefined)(
+    "keeps a concurrent current-branch run distinct from a staged archive",
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), "gnhf-archive-publish-"));
+      tempDirs.push(root);
+      const repoRoot = join(root, "repo");
+      const runsDir = join(repoRoot, ".gnhf", "runs");
+      const resultDir = join(root, "results");
+      const publishReadyPath = join(root, "publish-ready");
+      const publishReleasePath = join(root, "publish-release");
+      mkdirSync(repoRoot, { recursive: true });
+      mkdirSync(resultDir, { recursive: true });
+      execFileSync("git", ["init", "-b", "main"], {
+        cwd: repoRoot,
+        stdio: "ignore",
+      });
+
+      const runId = "concurrent-current-branch";
+      const archiveResultPath = join(resultDir, "archive.json");
+      const archivePayloadPath = join(root, "archive.json");
+      const archivePayload: ArchiveWorkerPayload = {
+        kind: "archive",
+        repoRoot,
+        resultPath: archiveResultPath,
+        runInfo: createSourceRun(join(root, "sources"), runId, "archive"),
+      };
+      writeFileSync(
+        archivePayloadPath,
+        JSON.stringify(archivePayload),
+        "utf-8",
+      );
+
+      const archiveProcess = runWorker("archive", archivePayloadPath, {
+        GNHF_ARCHIVE_PUBLISH_READY: publishReadyPath,
+        GNHF_ARCHIVE_PUBLISH_RELEASE: publishReleasePath,
+      });
+      await waitForPath(publishReadyPath);
+
+      const currentResultPath = join(resultDir, "current.json");
+      const currentPayloadPath = join(root, "current.json");
+      const currentPayload: CurrentWorkerPayload = {
+        kind: "current",
+        prompt: "prompt-current",
+        repoRoot,
+        resultPath: currentResultPath,
+        runId,
+      };
+      writeFileSync(
+        currentPayloadPath,
+        JSON.stringify(currentPayload),
+        "utf-8",
+      );
+      let currentProcess: ProcessResult;
+      try {
+        currentProcess = await runWorker("current", currentPayloadPath);
+      } finally {
+        writeFileSync(publishReleasePath, "", "utf-8");
+      }
+      expect(
+        currentProcess.code,
+        currentProcess.stdout + currentProcess.stderr,
+      ).toBe(0);
+
+      const archiveResult = await archiveProcess;
+      expect(
+        archiveResult.code,
+        archiveResult.stdout + archiveResult.stderr,
+      ).toBe(0);
+
+      const archivedRun = JSON.parse(
+        readFileSync(archiveResultPath, "utf-8"),
+      ) as RunInfo;
+      const currentRun = JSON.parse(
+        readFileSync(currentResultPath, "utf-8"),
+      ) as RunInfo;
+      expect([archivedRun.runId, currentRun.runId].sort()).toEqual([
+        runId,
+        `${runId}-1`,
+      ]);
+      expect(readdirSync(runsDir).sort()).toEqual([runId, `${runId}-1`]);
+      expect(readFileSync(archivedRun.promptPath, "utf-8")).toBe(
+        "prompt-archive",
+      );
+      expect(readFileSync(currentRun.promptPath, "utf-8")).toBe(
+        "prompt-current",
+      );
+      for (const run of [archivedRun, currentRun]) {
+        expect(readdirSync(run.runDir).sort()).toEqual([
+          "base-commit",
+          "commit-message",
+          "gnhf.log",
+          "notes.md",
+          "output-schema.json",
+          "prompt.md",
+        ]);
+        expect(readFileSync(run.notesPath, "utf-8")).toContain(
+          `Objective: see .gnhf/runs/${run.runId}/prompt.md`,
+        );
+      }
+    },
+    30_000,
+  );
+
   it.skipIf(workerPayloadPath === undefined)(
     "archives one synchronized worker record",
     () => {
       const payload = JSON.parse(
         readFileSync(workerPayloadPath!, "utf-8"),
       ) as WorkerPayload;
-      const archivedRun = archiveRun(payload.runInfo, payload.repoRoot);
-      writeFileSync(
-        payload.resultPath,
-        JSON.stringify(archivedRun),
-        "utf-8",
-      );
-      expect(existsSync(archivedRun.runDir)).toBe(true);
+      let run: RunInfo;
+      if (payload.kind === "archive") {
+        run = archiveRun(payload.runInfo, payload.repoRoot);
+      } else {
+        run =
+          resumeRunIfAvailable(payload.runId, payload.repoRoot, {
+            includeStopField: false,
+          }) ??
+          setupRunWithSuffix(
+            payload.runId,
+            payload.prompt,
+            "base-current",
+            payload.repoRoot,
+            { includeStopField: false },
+          );
+        writeFileSync(
+          run.logPath,
+          `${JSON.stringify({ event: "source", sourceId: "current" })}\n`,
+          "utf-8",
+        );
+      }
+      writeFileSync(payload.resultPath, JSON.stringify(run), "utf-8");
+      expect(existsSync(run.runDir)).toBe(true);
     },
   );
 });

@@ -1,6 +1,10 @@
 import {
+  closeSync,
   cpSync,
   mkdirSync,
+  mkdtempSync,
+  openSync,
+  renameSync,
   writeFileSync,
   appendFileSync,
   readFileSync,
@@ -53,82 +57,124 @@ function runIdWithSuffix(runId: string, suffix: number): string {
   return suffix === 0 ? runId : `${runId}-${suffix}`;
 }
 
+function hasErrorCode(error: unknown, ...codes: string[]): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    codes.includes(error.code)
+  );
+}
+
+interface RunIdLock {
+  fd: number;
+  path: string;
+}
+
+function runIdLockPath(runId: string, cwd: string): string {
+  return join(cwd, ".gnhf", "runs", `.${runId}.lock`);
+}
+
+function tryAcquireRunIdLock(runId: string, cwd: string): RunIdLock | null {
+  mkdirSync(join(cwd, ".gnhf", "runs"), { recursive: true });
+  const path = runIdLockPath(runId, cwd);
+  try {
+    return { fd: openSync(path, "wx", 0o600), path };
+  } catch (error) {
+    if (hasErrorCode(error, "EEXIST")) return null;
+    throw error;
+  }
+}
+
+function releaseRunIdLock(lock: RunIdLock): void {
+  try {
+    closeSync(lock.fd);
+  } finally {
+    rmSync(lock.path, { force: true });
+  }
+}
+
 export function createRunIdWithSuffix(runId: string, cwd: string): string {
   for (let suffix = 0; suffix < 100; suffix += 1) {
     const candidate = runIdWithSuffix(runId, suffix);
-    if (!existsSync(join(cwd, ".gnhf", "runs", candidate))) {
+    if (
+      !existsSync(join(cwd, ".gnhf", "runs", candidate)) &&
+      !existsSync(runIdLockPath(candidate, cwd))
+    ) {
       return candidate;
     }
   }
   throw new Error(`Unable to create a unique run id for ${runId}`);
 }
 
-function reserveArchiveRunDir(
-  runId: string,
-  repoRoot: string,
-): { archivedRunId: string; archivedRunDir: string } {
-  const runsDir = join(repoRoot, ".gnhf", "runs");
-  mkdirSync(runsDir, { recursive: true });
-
-  for (let suffix = 0; suffix < 100; suffix += 1) {
-    const archivedRunId = runIdWithSuffix(runId, suffix);
-    const archivedRunDir = join(runsDir, archivedRunId);
-    try {
-      mkdirSync(archivedRunDir);
-      return { archivedRunId, archivedRunDir };
-    } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "code" in error &&
-        error.code === "EEXIST"
-      ) {
-        continue;
-      }
-      throw error;
-    }
+function rewriteArchivedNotes(
+  notes: string,
+  originalRunId: string,
+  archivedRunId: string,
+): string {
+  if (archivedRunId === originalRunId) return notes;
+  const notesLines = notes.split("\n");
+  if (notesLines[0] === `# gnhf run: ${originalRunId}`) {
+    notesLines[0] = `# gnhf run: ${archivedRunId}`;
   }
-  throw new Error(`Unable to create a unique run id for ${runId}`);
+  if (
+    notesLines[2] === `Objective: see .gnhf/runs/${originalRunId}/prompt.md`
+  ) {
+    notesLines[2] = `Objective: see .gnhf/runs/${archivedRunId}/prompt.md`;
+  }
+  return notesLines.join("\n");
 }
 
 export function archiveRun(runInfo: RunInfo, repoRoot: string): RunInfo {
-  const { archivedRunId, archivedRunDir } = reserveArchiveRunDir(
-    runInfo.runId,
-    repoRoot,
-  );
-
-  const archivedPath = (path: string) => join(archivedRunDir, basename(path));
-  const archivedNotesPath = archivedPath(runInfo.notesPath);
+  const runsDir = join(repoRoot, ".gnhf", "runs");
+  mkdirSync(runsDir, { recursive: true });
+  const stagingRunDir = mkdtempSync(join(runsDir, ".archive-"));
+  const stagingNotesPath = join(stagingRunDir, basename(runInfo.notesPath));
   try {
-    cpSync(runInfo.runDir, archivedRunDir, { recursive: true });
-    if (archivedRunId !== runInfo.runId) {
-      const notesLines = readFileSync(archivedNotesPath, "utf-8").split("\n");
-      const originalHeader = `# gnhf run: ${runInfo.runId}`;
-      const originalObjective = `Objective: see .gnhf/runs/${runInfo.runId}/prompt.md`;
-      if (notesLines[0] === originalHeader) {
-        notesLines[0] = `# gnhf run: ${archivedRunId}`;
+    cpSync(runInfo.runDir, stagingRunDir, { recursive: true });
+    const originalNotes = readFileSync(stagingNotesPath, "utf-8");
+
+    for (let suffix = 0; suffix < 100; suffix += 1) {
+      const archivedRunId = runIdWithSuffix(runInfo.runId, suffix);
+      const archivedRunDir = join(runsDir, archivedRunId);
+      const lock = tryAcquireRunIdLock(archivedRunId, repoRoot);
+      if (!lock) continue;
+      try {
+        if (existsSync(archivedRunDir)) continue;
+        writeFileSync(
+          stagingNotesPath,
+          rewriteArchivedNotes(originalNotes, runInfo.runId, archivedRunId),
+          "utf-8",
+        );
+        try {
+          renameSync(stagingRunDir, archivedRunDir);
+        } catch (error) {
+          if (hasErrorCode(error, "EEXIST", "ENOTEMPTY")) continue;
+          throw error;
+        }
+        const archivedPath = (path: string) =>
+          join(archivedRunDir, basename(path));
+        return {
+          ...runInfo,
+          runId: archivedRunId,
+          runDir: archivedRunDir,
+          promptPath: archivedPath(runInfo.promptPath),
+          notesPath: archivedPath(runInfo.notesPath),
+          schemaPath: archivedPath(runInfo.schemaPath),
+          logPath: archivedPath(runInfo.logPath),
+          baseCommitPath: archivedPath(runInfo.baseCommitPath),
+          stopWhenPath: archivedPath(runInfo.stopWhenPath),
+          commitMessagePath: archivedPath(runInfo.commitMessagePath),
+        };
+      } finally {
+        releaseRunIdLock(lock);
       }
-      if (notesLines[2] === originalObjective) {
-        notesLines[2] = `Objective: see .gnhf/runs/${archivedRunId}/prompt.md`;
-      }
-      writeFileSync(archivedNotesPath, notesLines.join("\n"), "utf-8");
     }
-  } catch (error) {
-    rmSync(archivedRunDir, { recursive: true, force: true });
-    throw error;
+    throw new Error(`Unable to create a unique run id for ${runInfo.runId}`);
+  } finally {
+    rmSync(stagingRunDir, { recursive: true, force: true });
   }
-  return {
-    ...runInfo,
-    runId: archivedRunId,
-    runDir: archivedRunDir,
-    promptPath: archivedPath(runInfo.promptPath),
-    notesPath: archivedNotesPath,
-    schemaPath: archivedPath(runInfo.schemaPath),
-    logPath: archivedPath(runInfo.logPath),
-    baseCommitPath: archivedPath(runInfo.baseCommitPath),
-    stopWhenPath: archivedPath(runInfo.stopWhenPath),
-    commitMessagePath: archivedPath(runInfo.commitMessagePath),
-  };
 }
 
 function writeSchemaFile(
@@ -324,6 +370,27 @@ export function setupRun(
   };
 }
 
+export function setupRunWithSuffix(
+  runId: string,
+  prompt: string,
+  baseCommit: string,
+  cwd: string,
+  schemaOptions: RunSchemaOptions,
+): RunInfo {
+  for (let suffix = 0; suffix < 100; suffix += 1) {
+    const candidate = runIdWithSuffix(runId, suffix);
+    const lock = tryAcquireRunIdLock(candidate, cwd);
+    if (!lock) continue;
+    try {
+      if (existsSync(join(cwd, ".gnhf", "runs", candidate))) continue;
+      return setupRun(candidate, prompt, baseCommit, cwd, schemaOptions);
+    } finally {
+      releaseRunIdLock(lock);
+    }
+  }
+  throw new Error(`Unable to create a unique run id for ${runId}`);
+}
+
 export function resumeRun(
   runId: string,
   cwd: string,
@@ -374,6 +441,21 @@ export function resumeRun(
     commitMessagePath,
     commitMessage,
   };
+}
+
+export function resumeRunIfAvailable(
+  runId: string,
+  cwd: string,
+  schemaOptions: RunSchemaOptions,
+): RunInfo | null {
+  const lock = tryAcquireRunIdLock(runId, cwd);
+  if (!lock) return null;
+  try {
+    if (!existsSync(join(cwd, ".gnhf", "runs", runId))) return null;
+    return resumeRun(runId, cwd, schemaOptions);
+  } finally {
+    releaseRunIdLock(lock);
+  }
 }
 
 export function peekRunMetadata(runId: string, cwd: string): RunMetadata {
