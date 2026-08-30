@@ -68,6 +68,8 @@ interface CliMockOverrides {
   getBranchDiffStats?: ReturnType<typeof vi.fn>;
   peekRunMetadata?: ReturnType<typeof vi.fn>;
   resumeRun?: ReturnType<typeof vi.fn>;
+  archiveRun?: ReturnType<typeof vi.fn>;
+  createRunIdWithSuffix?: ReturnType<typeof vi.fn>;
   getLastIterationNumber?: ReturnType<typeof vi.fn>;
   orchestratorStart?: ReturnType<typeof vi.fn>;
   orchestratorGetState?: ReturnType<typeof vi.fn>;
@@ -127,6 +129,10 @@ async function runCliWithMocks(
   const setupRun = vi.fn(() => stubRunInfo);
   const peekRunMetadata = overrides.peekRunMetadata ?? vi.fn(() => stubRunInfo);
   const resumeRun = overrides.resumeRun ?? vi.fn();
+  const archiveRun =
+    overrides.archiveRun ?? vi.fn((runInfo: RunInfo) => runInfo);
+  const createRunIdWithSuffix =
+    overrides.createRunIdWithSuffix ?? vi.fn((runId: string) => runId);
   const getLastIterationNumber =
     overrides.getLastIterationNumber ?? vi.fn(() => 0);
   const ensureCleanWorkingTree = overrides.ensureCleanWorkingTree ?? vi.fn();
@@ -207,6 +213,8 @@ async function runCliWithMocks(
     setupRun,
     peekRunMetadata,
     resumeRun,
+    archiveRun,
+    createRunIdWithSuffix,
     getLastIterationNumber,
   }));
   vi.doMock("./core/stdin.js", () => ({ readStdinText }));
@@ -292,6 +300,7 @@ async function runCliWithMocks(
 
   return {
     appendDebugLog,
+    initDebugLog,
     consoleError,
     consoleErrorCalls,
     stdoutWriteCalls,
@@ -300,6 +309,8 @@ async function runCliWithMocks(
     setupRun,
     peekRunMetadata,
     resumeRun,
+    archiveRun,
+    createRunIdWithSuffix,
     getLastIterationNumber,
     orchestratorCtor,
     rendererCtor,
@@ -3281,8 +3292,55 @@ describe("cli", () => {
     expect(listWorktreePaths).toHaveBeenCalledTimes(1);
   });
 
+  it("archives a zero-commit run before removing its worktree and summarizes the archive", async () => {
+    const order: string[] = [];
+    const durableRunDir = "/repo/.gnhf/runs/run-abc-1";
+    const durableRunInfo: RunInfo = {
+      ...stubRunInfo,
+      runId: "run-abc-1",
+      runDir: durableRunDir,
+      promptPath: join(durableRunDir, "PROMPT.md"),
+      notesPath: join(durableRunDir, "notes.md"),
+      schemaPath: join(durableRunDir, "schema.json"),
+      logPath: join(durableRunDir, "gnhf.log"),
+      baseCommitPath: join(durableRunDir, "base-commit"),
+      stopWhenPath: join(durableRunDir, "stop-when"),
+      commitMessagePath: join(durableRunDir, "commit-message"),
+    };
+    const archiveRun = vi.fn(() => {
+      order.push("archive");
+      return durableRunInfo;
+    });
+    const removeWorktree = vi.fn(() => {
+      order.push("remove");
+    });
+
+    const { stdoutWriteCalls, initDebugLog } = await runCliWithMocks(
+      ["ship it", "--worktree"],
+      {
+        agent: "claude",
+        agentPathOverride: {},
+        agentArgsOverride: {},
+        acpRegistryOverrides: {},
+        maxConsecutiveFailures: 3,
+        preventSleep: false,
+      },
+      { archiveRun, removeWorktree },
+    );
+
+    expect(order).toEqual(["archive", "remove"]);
+    expect(archiveRun).toHaveBeenCalledWith(stubRunInfo, process.cwd());
+    expect(initDebugLog).toHaveBeenLastCalledWith(durableRunInfo.logPath);
+    const stdout = stdoutWriteCalls.map(([chunk]) => String(chunk)).join("");
+    expect(stdout).toContain(durableRunInfo.notesPath);
+    expect(stdout).toContain(durableRunInfo.logPath);
+    expect(stdout).not.toContain(`notes           ${stubRunInfo.notesPath}\n`);
+    expect(stdout).not.toContain(`debug log       ${stubRunInfo.logPath}\n`);
+  });
+
   it("preserves a new worktree with pending commit repair changes", async () => {
     const removeWorktree = vi.fn();
+    const archiveRun = vi.fn();
 
     await runCliWithMocks(
       ["ship it", "--worktree"],
@@ -3296,6 +3354,7 @@ describe("cli", () => {
       },
       {
         removeWorktree,
+        archiveRun,
         orchestratorGetState: vi.fn(() => ({
           status: "aborted" as const,
           gracefulStopRequested: false,
@@ -3316,6 +3375,46 @@ describe("cli", () => {
     );
 
     expect(removeWorktree).not.toHaveBeenCalled();
+    expect(archiveRun).not.toHaveBeenCalled();
+  });
+
+  it("does not archive or remove a worktree with commits", async () => {
+    const removeWorktree = vi.fn();
+    const archiveRun = vi.fn();
+
+    await runCliWithMocks(
+      ["ship it", "--worktree"],
+      {
+        agent: "claude",
+        agentPathOverride: {},
+        agentArgsOverride: {},
+        acpRegistryOverrides: {},
+        maxConsecutiveFailures: 3,
+        preventSleep: false,
+      },
+      {
+        removeWorktree,
+        archiveRun,
+        orchestratorGetState: vi.fn(() => ({
+          status: "completed" as const,
+          gracefulStopRequested: false,
+          currentIteration: 1,
+          totalInputTokens: 0,
+          totalOutputTokens: 0,
+          commitCount: 1,
+          iterations: [],
+          successCount: 1,
+          failCount: 0,
+          consecutiveFailures: 0,
+          startTime: new Date("2026-01-01T00:00:00Z"),
+          waitingUntil: null,
+          lastMessage: null,
+        })),
+      },
+    );
+
+    expect(removeWorktree).not.toHaveBeenCalled();
+    expect(archiveRun).not.toHaveBeenCalled();
   });
 
   it("preserves and reports a worktree with commits when exit handler fires before preservation block", async () => {

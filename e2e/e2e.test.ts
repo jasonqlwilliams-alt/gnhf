@@ -1,7 +1,9 @@
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -858,6 +860,72 @@ describe("gnhf e2e", () => {
     },
     30_000,
   );
+
+  it("archives a zero-commit worktree run before cleanup and prints durable paths", async () => {
+    const cwd = createRepo();
+    tempDirs.push(cwd);
+    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    tempDirs.push(logDir);
+    const mockLogPath = join(logDir, "mock-opencode.jsonl");
+    const prompt = "zero commit cleanup";
+    const runId = `zero-commit-cleanup-${createHash("sha256")
+      .update(prompt)
+      .digest("hex")
+      .slice(0, 6)}`;
+    const worktreeParent = `${cwd}-gnhf-worktrees`;
+    tempDirs.push(worktreeParent);
+
+    const collidingRunDir = join(cwd, ".gnhf", "runs", runId);
+    mkdirSync(collidingRunDir, { recursive: true });
+    writeFileSync(join(collidingRunDir, "existing.txt"), "keep me\n", "utf-8");
+
+    const result = await runCli(
+      cwd,
+      [prompt, "--agent", "opencode", "--max-iterations", "0", "--worktree"],
+      { env: createTestEnv(mockLogPath, tempDirs) },
+    );
+
+    expect(result.code).toBe(0);
+    expect(readFileSync(join(collidingRunDir, "existing.txt"), "utf-8")).toBe(
+      "keep me\n",
+    );
+
+    const archivedRunDir = join(cwd, ".gnhf", "runs", `${runId}-1`);
+    expect(readdirSync(join(cwd, ".gnhf", "runs")).sort()).toEqual([
+      runId,
+      `${runId}-1`,
+    ]);
+    const archivedFiles = readdirSync(archivedRunDir).sort();
+    expect(archivedFiles).toEqual([
+      "base-commit",
+      "commit-message",
+      "gnhf.log",
+      "notes.md",
+      "output-schema.json",
+      "prompt.md",
+    ]);
+    expect(readFileSync(join(archivedRunDir, "prompt.md"), "utf-8")).toBe(
+      prompt,
+    );
+
+    const archivedNotesPath = join(archivedRunDir, "notes.md");
+    const archivedLogPath = join(archivedRunDir, "gnhf.log");
+    expect(result.stdout).toContain(archivedNotesPath);
+    expect(result.stdout).toContain(archivedLogPath);
+    expect(result.stdout).not.toContain(
+      join(worktreeParent, runId, ".gnhf", "runs", runId),
+    );
+
+    const debugEvents = readJsonLines(archivedLogPath).map(
+      (entry) => entry.event,
+    );
+    expect(debugEvents).toContain("run:complete");
+    expect(debugEvents).toContain("worktree:cleaned-up");
+
+    if (existsSync(worktreeParent)) {
+      expect(readdirSync(worktreeParent)).toEqual([]);
+    }
+  }, 30_000);
 
   // Windows has no POSIX signals; child.kill("SIGINT") force-terminates the
   // process tree without triggering the graceful shutdown path this test covers.

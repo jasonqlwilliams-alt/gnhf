@@ -1,4 +1,5 @@
 import {
+  cpSync,
   mkdirSync,
   writeFileSync,
   appendFileSync,
@@ -7,7 +8,7 @@ import {
   existsSync,
   rmSync,
 } from "node:fs";
-import { join, dirname, isAbsolute } from "node:path";
+import { basename, join, dirname, isAbsolute } from "node:path";
 import { execFileSync } from "node:child_process";
 import {
   buildAgentOutputSchema,
@@ -47,6 +48,41 @@ export interface RunMetadata {
 const LOG_FILENAME = "gnhf.log";
 const STOP_WHEN_FILENAME = "stop-when";
 const COMMIT_MESSAGE_FILENAME = "commit-message";
+
+function runIdWithSuffix(runId: string, suffix: number): string {
+  return suffix === 0 ? runId : `${runId}-${suffix}`;
+}
+
+export function createRunIdWithSuffix(runId: string, cwd: string): string {
+  for (let suffix = 0; suffix < 100; suffix += 1) {
+    const candidate = runIdWithSuffix(runId, suffix);
+    if (!existsSync(join(cwd, ".gnhf", "runs", candidate))) {
+      return candidate;
+    }
+  }
+  throw new Error(`Unable to create a unique run id for ${runId}`);
+}
+
+export function archiveRun(runInfo: RunInfo, cwd: string): RunInfo {
+  const archivedRunId = createRunIdWithSuffix(runInfo.runId, cwd);
+  const archivedRunDir = join(cwd, ".gnhf", "runs", archivedRunId);
+  mkdirSync(dirname(archivedRunDir), { recursive: true });
+  cpSync(runInfo.runDir, archivedRunDir, { recursive: true });
+
+  const archivedPath = (path: string) => join(archivedRunDir, basename(path));
+  return {
+    ...runInfo,
+    runId: archivedRunId,
+    runDir: archivedRunDir,
+    promptPath: archivedPath(runInfo.promptPath),
+    notesPath: archivedPath(runInfo.notesPath),
+    schemaPath: archivedPath(runInfo.schemaPath),
+    logPath: archivedPath(runInfo.logPath),
+    baseCommitPath: archivedPath(runInfo.baseCommitPath),
+    stopWhenPath: archivedPath(runInfo.stopWhenPath),
+    commitMessagePath: archivedPath(runInfo.commitMessagePath),
+  };
+}
 
 function writeSchemaFile(
   schemaPath: string,

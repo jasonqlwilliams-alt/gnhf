@@ -45,6 +45,8 @@ import {
   type RunSchemaOptions,
   setupRun,
   resumeRun,
+  archiveRun,
+  createRunIdWithSuffix,
   peekRunMetadata,
   getLastIterationNumber,
 } from "./core/run.js";
@@ -295,20 +297,6 @@ function createBranchWithSuffix(branchName: string, cwd: string): string {
     }
   }
   throw new Error(`Unable to create a unique branch name for ${branchName}`);
-}
-
-function runIdWithSuffix(runId: string, suffix: number): string {
-  return suffix === 0 ? runId : `${runId}-${suffix}`;
-}
-
-function createRunIdWithSuffix(runId: string, cwd: string): string {
-  for (let suffix = 0; suffix < 100; suffix += 1) {
-    const candidate = runIdWithSuffix(runId, suffix);
-    if (!existsSync(join(cwd, ".gnhf", "runs", candidate))) {
-      return candidate;
-    }
-  }
-  throw new Error(`Unable to create a unique run id for ${runId}`);
 }
 
 interface WorktreeRunResult {
@@ -1170,31 +1158,6 @@ program
           });
         }
 
-        const exitSummary = renderExitSummary({
-          agentName: redactAgentSpecForLogs(config.agent),
-          branchName: finalBranchName,
-          elapsedMs: Date.now() - finalState.startTime.getTime(),
-          status: finalState.status,
-          abortReason: finalState.lastAgentError ?? finalState.lastMessage,
-          iterations: finalState.currentIteration,
-          successCount: finalState.successCount,
-          failCount: finalState.failCount,
-          totalInputTokens: finalState.totalInputTokens,
-          totalOutputTokens: finalState.totalOutputTokens,
-          totalCacheReadTokens: finalState.totalCacheReadTokens,
-          totalCacheCreationTokens: finalState.totalCacheCreationTokens,
-          tokensEstimated: finalState.tokensEstimated,
-          commitCount: finalState.commitCount,
-          notesPath: runInfo.notesPath,
-          logPath: runInfo.logPath,
-          baseRef: runInfo.baseCommit.slice(0, 12) || runInfo.baseCommit,
-          diffStats,
-          color: shouldUseColor(),
-          terminalColumns: process.stdout.columns,
-          hasPendingCommitFailure: finalState.hasPendingCommitFailure,
-          sleepPreventionNotice,
-        });
-
         appendDebugLog("run:complete", {
           signal: shutdownSignal,
           status: finalState.status,
@@ -1242,10 +1205,6 @@ program
         });
         await telemetry.close(1_000);
 
-        if (finalState.status === "aborted") {
-          console.error(`\n  gnhf: Run log: ${runInfo.logPath}\n`);
-        }
-
         if (worktreePath) {
           if (
             finalState.commitCount > 0 ||
@@ -1257,13 +1216,46 @@ program
                 `\n  gnhf: merge the branch and remove with: git worktree remove "${worktreePath}"\n`,
             );
           } else {
-            worktreeCleanup?.();
+            const cleanup = worktreeCleanup;
             worktreeCleanup = null;
+            runInfo = archiveRun(runInfo, cwd);
+            initDebugLog(runInfo.logPath);
+            cleanup?.();
             appendDebugLog("worktree:cleaned-up", {
               worktreePath,
+              archivedRunDir: runInfo.runDir,
             });
           }
         }
+
+        if (finalState.status === "aborted") {
+          console.error(`\n  gnhf: Run log: ${runInfo.logPath}\n`);
+        }
+
+        const exitSummary = renderExitSummary({
+          agentName: redactAgentSpecForLogs(config.agent),
+          branchName: finalBranchName,
+          elapsedMs: Date.now() - finalState.startTime.getTime(),
+          status: finalState.status,
+          abortReason: finalState.lastAgentError ?? finalState.lastMessage,
+          iterations: finalState.currentIteration,
+          successCount: finalState.successCount,
+          failCount: finalState.failCount,
+          totalInputTokens: finalState.totalInputTokens,
+          totalOutputTokens: finalState.totalOutputTokens,
+          totalCacheReadTokens: finalState.totalCacheReadTokens,
+          totalCacheCreationTokens: finalState.totalCacheCreationTokens,
+          tokensEstimated: finalState.tokensEstimated,
+          commitCount: finalState.commitCount,
+          notesPath: runInfo.notesPath,
+          logPath: runInfo.logPath,
+          baseRef: runInfo.baseCommit.slice(0, 12) || runInfo.baseCommit,
+          diffStats,
+          color: shouldUseColor(),
+          terminalColumns: process.stdout.columns,
+          hasPendingCommitFailure: finalState.hasPendingCommitFailure,
+          sleepPreventionNotice,
+        });
 
         process.stdout.write(exitSummary);
       }

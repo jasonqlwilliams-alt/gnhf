@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { join } from "node:path";
 
 vi.mock("node:fs", () => ({
+  cpSync: vi.fn(),
   mkdirSync: vi.fn(),
   writeFileSync: vi.fn(),
   appendFileSync: vi.fn(),
