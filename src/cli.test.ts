@@ -3329,7 +3329,7 @@ describe("cli", () => {
     );
 
     expect(order).toEqual(["archive", "remove"]);
-    expect(archiveRun).toHaveBeenCalledWith(stubRunInfo, process.cwd());
+    expect(archiveRun).toHaveBeenCalledWith(stubRunInfo, "/repo");
     expect(initDebugLog).toHaveBeenLastCalledWith(durableRunInfo.logPath);
     const stdout = stdoutWriteCalls.map(([chunk]) => String(chunk)).join("");
     expect(stdout).toContain(durableRunInfo.notesPath);

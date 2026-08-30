@@ -862,8 +862,10 @@ describe("gnhf e2e", () => {
   );
 
   it("archives a zero-commit worktree run before cleanup and prints durable paths", async () => {
-    const cwd = createRepo();
-    tempDirs.push(cwd);
+    const sourceRepoRoot = createRepo();
+    tempDirs.push(sourceRepoRoot);
+    const invocationCwd = join(sourceRepoRoot, "packages", "app");
+    mkdirSync(invocationCwd, { recursive: true });
     const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
     tempDirs.push(logDir);
     const mockLogPath = join(logDir, "mock-opencode.jsonl");
@@ -872,15 +874,15 @@ describe("gnhf e2e", () => {
       .update(prompt)
       .digest("hex")
       .slice(0, 6)}`;
-    const worktreeParent = `${cwd}-gnhf-worktrees`;
+    const worktreeParent = `${sourceRepoRoot}-gnhf-worktrees`;
     tempDirs.push(worktreeParent);
 
-    const collidingRunDir = join(cwd, ".gnhf", "runs", runId);
+    const collidingRunDir = join(sourceRepoRoot, ".gnhf", "runs", runId);
     mkdirSync(collidingRunDir, { recursive: true });
     writeFileSync(join(collidingRunDir, "existing.txt"), "keep me\n", "utf-8");
 
     const result = await runCli(
-      cwd,
+      invocationCwd,
       [prompt, "--agent", "opencode", "--max-iterations", "0", "--worktree"],
       { env: createTestEnv(mockLogPath, tempDirs) },
     );
@@ -890,11 +892,16 @@ describe("gnhf e2e", () => {
       "keep me\n",
     );
 
-    const archivedRunDir = join(cwd, ".gnhf", "runs", `${runId}-1`);
-    expect(readdirSync(join(cwd, ".gnhf", "runs")).sort()).toEqual([
-      runId,
+    const archivedRunDir = join(
+      sourceRepoRoot,
+      ".gnhf",
+      "runs",
       `${runId}-1`,
-    ]);
+    );
+    expect(
+      readdirSync(join(sourceRepoRoot, ".gnhf", "runs")).sort(),
+    ).toEqual([runId, `${runId}-1`]);
+    expect(existsSync(join(invocationCwd, ".gnhf"))).toBe(false);
     const archivedFiles = readdirSync(archivedRunDir).sort();
     expect(archivedFiles).toEqual([
       "base-commit",
@@ -910,6 +917,14 @@ describe("gnhf e2e", () => {
 
     const archivedNotesPath = join(archivedRunDir, "notes.md");
     const archivedLogPath = join(archivedRunDir, "gnhf.log");
+    const archivedNotes = readFileSync(archivedNotesPath, "utf-8");
+    expect(archivedNotes).toContain(`# gnhf run: ${runId}-1`);
+    expect(archivedNotes).toContain(
+      `Objective: see .gnhf/runs/${runId}-1/prompt.md`,
+    );
+    expect(archivedNotes).not.toContain(
+      `Objective: see .gnhf/runs/${runId}/prompt.md`,
+    );
     expect(result.stdout).toContain(archivedNotesPath);
     expect(result.stdout).toContain(archivedLogPath);
     expect(result.stdout).not.toContain(

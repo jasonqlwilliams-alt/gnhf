@@ -301,6 +301,7 @@ function createBranchWithSuffix(branchName: string, cwd: string): string {
 
 interface WorktreeRunResult {
   runInfo: RunInfo;
+  repoRoot: string;
   worktreePath: string;
   effectiveCwd: string;
   resumed: boolean;
@@ -363,6 +364,7 @@ function initializeWorktreeRun(
     );
     return {
       runInfo,
+      repoRoot,
       worktreePath: candidateWorktreePath,
       effectiveCwd: candidateWorktreePath,
       resumed: true,
@@ -412,6 +414,7 @@ function initializeWorktreeRun(
   );
   return {
     runInfo,
+    repoRoot,
     worktreePath: createdWorktreePath,
     effectiveCwd: createdWorktreePath,
     resumed: false,
@@ -716,6 +719,7 @@ program
 
       const cwd = process.cwd();
       let effectiveCwd = cwd;
+      let originatingRepoRoot: string | null = null;
       let worktreePath: string | null = null;
       let worktreeCleanup: (() => void) | null = null;
       let getOrchestratorState:
@@ -775,6 +779,7 @@ program
           buildResumeSchemaOptions(options.stopWhen, effectiveCommitMessage),
         );
         runInfo = wt.runInfo;
+        originatingRepoRoot = wt.repoRoot;
         effectiveCwd = wt.effectiveCwd;
         worktreePath = wt.worktreePath;
 
@@ -1218,7 +1223,10 @@ program
           } else {
             const cleanup = worktreeCleanup;
             worktreeCleanup = null;
-            runInfo = archiveRun(runInfo, cwd);
+            if (!originatingRepoRoot) {
+              throw new Error("Missing originating repository root");
+            }
+            runInfo = archiveRun(runInfo, originatingRepoRoot);
             initDebugLog(runInfo.logPath);
             cleanup?.();
             appendDebugLog("worktree:cleaned-up", {
