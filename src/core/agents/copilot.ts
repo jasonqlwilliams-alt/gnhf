@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, type WriteStream } from "node:fs";
 import {
   buildAgentOutputSchema,
   parseAgentOutput,
@@ -9,6 +9,7 @@ import {
   type AgentRunOptions,
   type TokenUsage,
 } from "./types.js";
+import { appendDebugLog } from "../debug-log.js";
 import {
   parseJSONLStream,
   setupAbortHandler,
@@ -19,6 +20,12 @@ import {
   copilotExactSessionArgs,
   extractCopilotSessionId,
 } from "./copilot-session.js";
+import {
+  EMPTY_RESPONSE_CONTINUATION_PROMPT,
+  EmptyAgentResponseError,
+  addTokenUsage,
+  recoverEmptyResponseOnce,
+} from "./empty-response.js";
 
 interface CopilotAssistantMessageEvent {
   type: "assistant.message";
@@ -222,16 +229,72 @@ export class CopilotAgent implements Agent {
     this.sessionId = deps.sessionId;
   }
 
-  run(
+  async run(
     prompt: string,
     cwd: string,
     options?: AgentRunOptions,
   ): Promise<AgentResult> {
-    const { onUsage, onMessage, signal, logPath } = options ?? {};
+    const logStream = options?.logPath
+      ? createWriteStream(options.logPath)
+      : null;
+
+    try {
+      try {
+        return await this.runTurn(
+          prompt,
+          cwd,
+          options,
+          this.sessionId,
+          logStream,
+        );
+      } catch (error) {
+        if (
+          !(error instanceof CopilotEmptyTurnError) ||
+          error.sessionId === null
+        ) {
+          throw error;
+        }
+
+        const sessionId = error.sessionId;
+        return await recoverEmptyResponseOnce(
+          new EmptyAgentResponseError(error.message, error.usage),
+          (empty) => {
+            appendDebugLog("copilot:output:continuation", {
+              sessionId,
+              attempt: 1,
+            });
+            const onUsage = options?.onUsage;
+            return this.runTurn(
+              EMPTY_RESPONSE_CONTINUATION_PROMPT,
+              cwd,
+              onUsage
+                ? {
+                    ...options,
+                    onUsage: (usage) =>
+                      onUsage(addTokenUsage(empty.usage, usage)),
+                  }
+                : options,
+              sessionId,
+              logStream,
+            );
+          },
+        );
+      }
+    } finally {
+      logStream?.end();
+    }
+  }
+
+  private runTurn(
+    prompt: string,
+    cwd: string,
+    options: AgentRunOptions | undefined,
+    sessionId: string | undefined,
+    logStream: WriteStream | null,
+  ): Promise<AgentResult> {
+    const { onUsage, onMessage, signal } = options ?? {};
 
     return new Promise((resolve, reject) => {
-      const logStream = logPath ? createWriteStream(logPath) : null;
-
       const child = spawn(
         this.bin,
         buildCopilotArgs(
@@ -239,7 +302,7 @@ export class CopilotAgent implements Agent {
           this.schema,
           this.extraArgs,
           this.model,
-          this.sessionId,
+          sessionId,
         ),
         {
           cwd,
@@ -258,7 +321,7 @@ export class CopilotAgent implements Agent {
       }
 
       let lastAgentMessage: string | null = null;
-      let capturedSessionId: string | null = this.sessionId ?? null;
+      let capturedSessionId: string | null = sessionId ?? null;
       const cumulative: TokenUsage = {
         inputTokens: 0,
         outputTokens: 0,
@@ -267,9 +330,9 @@ export class CopilotAgent implements Agent {
       };
 
       parseJSONLStream<CopilotEvent>(child.stdout!, logStream, (event) => {
-        const sessionId = extractCopilotSessionId(event);
-        if (sessionId !== null) {
-          capturedSessionId = sessionId;
+        const captured = extractCopilotSessionId(event);
+        if (captured !== null) {
+          capturedSessionId = captured;
         }
 
         if (event.type === "assistant.message") {
@@ -299,9 +362,11 @@ export class CopilotAgent implements Agent {
         }
       });
 
-      setupChildProcessHandlers(child, "copilot", logStream, reject, () => {
+      setupChildProcessHandlers(child, "copilot", null, reject, () => {
         if (!lastAgentMessage) {
-          reject(new CopilotEmptyTurnError(capturedSessionId));
+          reject(
+            new CopilotEmptyTurnError(capturedSessionId, { ...cumulative }),
+          );
           return;
         }
 

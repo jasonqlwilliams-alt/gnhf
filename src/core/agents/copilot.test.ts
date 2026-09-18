@@ -9,7 +9,10 @@ vi.mock("node:child_process", () => ({
 import { execFileSync, spawn } from "node:child_process";
 import { CopilotAgent } from "./copilot.js";
 import { CopilotEmptyTurnError } from "./copilot-session.js";
-import { EmptyAgentResponseError } from "./empty-response.js";
+import {
+  EMPTY_RESPONSE_CONTINUATION_PROMPT,
+  EmptyAgentResponseError,
+} from "./empty-response.js";
 import { buildAgentOutputSchema } from "./types.js";
 
 const COPILOT_SESSION_ID = "0cb916db-26aa-40f2-86b5-1ba81b225fd2";
@@ -28,6 +31,30 @@ function createMockProcess() {
 
 function emitJson(proc: ReturnType<typeof createMockProcess>, event: unknown) {
   proc.stdout.emit("data", Buffer.from(`${JSON.stringify(event)}\n`));
+}
+
+function spawnArgs(callIndex: number): string[] {
+  return mockSpawn.mock.calls[callIndex]![1] as string[];
+}
+
+function expectExactSessionResume(args: string[], sessionId: string): void {
+  const sessionFlagAt = args.indexOf("--session-id");
+  expect(sessionFlagAt).toBeGreaterThanOrEqual(0);
+  expect(args[sessionFlagAt + 1]).toBe(sessionId);
+  expect(args).not.toContain("--continue");
+  expect(args).not.toContain("--resume");
+  expect(args).not.toContain("-r");
+  expect(args.some((arg) => arg.startsWith("--resume="))).toBe(false);
+  expect(args.some((arg) => arg.startsWith("--session-id="))).toBe(false);
+}
+
+function recoveredOutput(summary: string) {
+  return {
+    success: true,
+    summary,
+    key_changes_made: [],
+    key_learnings: [],
+  };
 }
 
 describe("CopilotAgent", () => {
@@ -298,15 +325,19 @@ describe("CopilotAgent", () => {
       message: "copilot returned no agent message",
       sessionId: null,
     });
+    await expect(promise).rejects.not.toBeInstanceOf(EmptyAgentResponseError);
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
   });
 
-  it("captures session.start data.sessionId from an empty Copilot turn", async () => {
-    const proc = createMockProcess();
-    mockSpawn.mockReturnValue(proc);
+  it("continues the same session once when the first turn has no agent message", async () => {
+    const first = createMockProcess();
+    const second = createMockProcess();
+    mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
     const agent = new CopilotAgent();
+    const content = JSON.stringify(recoveredOutput("recovered"));
 
     const promise = agent.run("test prompt", "/work/dir");
-    emitJson(proc, {
+    emitJson(first, {
       type: "session.start",
       data: {
         sessionId: COPILOT_SESSION_ID,
@@ -314,19 +345,111 @@ describe("CopilotAgent", () => {
         producer: "copilot-agent",
       },
     });
-    emitJson(proc, {
+    emitJson(first, {
       type: "assistant.message",
-      data: { content: "", outputTokens: 0 },
+      data: { content: "", outputTokens: 1 },
     });
-    proc.emit("close", 0);
+    first.emit("close", 0);
+
+    await vi.waitFor(() => {
+      expect(mockSpawn).toHaveBeenCalledTimes(2);
+    });
+
+    emitJson(second, {
+      type: "assistant.message",
+      data: { content, outputTokens: 7 },
+    });
+    second.emit("close", 0);
+
+    await expect(promise).resolves.toEqual({
+      output: recoveredOutput("recovered"),
+      usage: {
+        inputTokens: 0,
+        outputTokens: 8,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+      },
+    });
+
+    const firstArgs = spawnArgs(0);
+    const secondArgs = spawnArgs(1);
+    expect(firstArgs).not.toContain("--session-id");
+    expect(firstArgs[firstArgs.indexOf("-p") + 1]).toContain("test prompt");
+    expect(firstArgs).not.toContain("--continue");
+    expect(firstArgs).not.toContain("--resume");
+    expectExactSessionResume(secondArgs, COPILOT_SESSION_ID);
+    expect(secondArgs[secondArgs.indexOf("-p") + 1]).toContain(
+      EMPTY_RESPONSE_CONTINUATION_PROMPT,
+    );
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
+  });
+
+  it("records the original failure when the retry is still empty", async () => {
+    const first = createMockProcess();
+    const second = createMockProcess();
+    mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const agent = new CopilotAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(first, {
+      type: "session.start",
+      data: {
+        sessionId: COPILOT_SESSION_ID,
+        version: 1,
+        producer: "copilot-agent",
+      },
+    });
+    first.emit("close", 0);
+
+    await vi.waitFor(() => {
+      expect(mockSpawn).toHaveBeenCalledTimes(2);
+    });
+
+    second.emit("close", 0);
 
     await expect(promise).rejects.toMatchObject({
       name: "CopilotEmptyTurnError",
       message: "copilot returned no agent message",
-      sessionId: COPILOT_SESSION_ID,
     });
     await expect(promise).rejects.toBeInstanceOf(CopilotEmptyTurnError);
+    expectExactSessionResume(spawnArgs(1), COPILOT_SESSION_ID);
+    expect(spawnArgs(1)[spawnArgs(1).indexOf("-p") + 1]).toContain(
+      EMPTY_RESPONSE_CONTINUATION_PROMPT,
+    );
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
+  });
+
+  it("aborts a continuation instead of recording an empty-response failure", async () => {
+    const first = createMockProcess();
+    const second = createMockProcess();
+    mockSpawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const controller = new AbortController();
+    const agent = new CopilotAgent();
+
+    const promise = agent.run("test prompt", "/work/dir", {
+      signal: controller.signal,
+    });
+    emitJson(first, {
+      type: "session.start",
+      data: {
+        sessionId: COPILOT_SESSION_ID,
+        version: 1,
+        producer: "copilot-agent",
+      },
+    });
+    first.emit("close", 0);
+
+    await vi.waitFor(() => {
+      expect(mockSpawn).toHaveBeenCalledTimes(2);
+    });
+
+    controller.abort();
+
+    await expect(promise).rejects.toThrow("Agent was aborted");
     await expect(promise).rejects.not.toBeInstanceOf(EmptyAgentResponseError);
+    await expect(promise).rejects.not.toBeInstanceOf(CopilotEmptyTurnError);
+    expectExactSessionResume(spawnArgs(1), COPILOT_SESSION_ID);
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
   });
 
   it("resumes that empty turn with --session-id and never --continue or --resume", () => {
@@ -336,15 +459,7 @@ describe("CopilotAgent", () => {
 
     agent.run("You did not produce a final answer. Continue.", "/work/dir");
 
-    const args = mockSpawn.mock.calls[0]![1] as string[];
-    const sessionFlagAt = args.indexOf("--session-id");
-    expect(sessionFlagAt).toBeGreaterThanOrEqual(0);
-    expect(args[sessionFlagAt + 1]).toBe(COPILOT_SESSION_ID);
-    expect(args).not.toContain("--continue");
-    expect(args).not.toContain("--resume");
-    expect(args).not.toContain("-r");
-    expect(args.some((arg) => arg.startsWith("--resume="))).toBe(false);
-    expect(args.some((arg) => arg.startsWith("--session-id="))).toBe(false);
+    expectExactSessionResume(spawnArgs(0), COPILOT_SESSION_ID);
   });
 
   it("rejects when the final assistant message is not valid JSON", async () => {

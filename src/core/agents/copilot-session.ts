@@ -1,10 +1,21 @@
+import type { TokenUsage } from "./types.js";
+
+const EMPTY_USAGE: TokenUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheCreationTokens: 0,
+};
+
 export class CopilotEmptyTurnError extends Error {
   readonly sessionId: string | null;
+  readonly usage: TokenUsage;
 
-  constructor(sessionId: string | null) {
+  constructor(sessionId: string | null, usage: TokenUsage = EMPTY_USAGE) {
     super("copilot returned no agent message");
     this.name = "CopilotEmptyTurnError";
     this.sessionId = sessionId;
+    this.usage = usage;
   }
 }
 
