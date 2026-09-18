@@ -1,0 +1,32 @@
+                       [2m":"ec6c05c9346d0279cd8f465c598294ba96957a71","initialCommitCount[0m                       
+           [1m✧[0m                                         [2m":0}[0m                                             [1m·[0m    [2m⋆[0m  
+                       [2m{"timestamp":"2026-09-18T22:48:47.500Z","pid":3013038,"event":"i⋆[0m                      
+ [2m·[0m                    [1m·[0;2mteration:start","iteration":1,"promptLength":2147,"consecutiveFa[0m                       
+                       [2milures":0,"totalInputTokens":0,"totalOutputTokens":0,"git":{"hea[0m     [1m·[0m                 
+   [1m·[0m           [1m✧[0m       [2md":"ec6c05c9346d0279cd8f465c598294ba96957a71","branch":"main","c[0m   [1m·[0m                   
+      [2m°[0m                                        [2mommitCount":0}}[0m                                         [2m·[0m      
+   [1m⋆[0m       [2m°[0m    [2m·[0m      [2m{"timestamp":"2026-09-18T22:48:47.500Z","pid":3013038,"event":"a[0m  [2m⋆[0m      [1m°[0m             
+                       [2mgent:run:start","iteration":1,"agent":"claude","logPath":"/tmp/g[0m                       
+                       [2mnhf-tui-live-drive/repo/.gnhf/runs/review-the-overnight-cca021/i[0m                 [1m·[0m     
+                                              [2mteration-1.jsonl"}[0m                                              
+                 [2m·[0m    [1m·[0;2m{"timestamp":"2026-09-18T22:48:59.546Z","pid":3013038,"event":"a[0m        [1m°[0m              
+     [1m°[0m                 [2mgent:run:end","iteration":1,"elapsedMs":12046,"success":true,"in[0m       [1m·[0m               
+                       [2mputTokens":12,"outputTokens":7,"cacheReadTokens":0,"cacheCreatio[0m       [1m·[0m               
+                                        [2mnTokens":0,"estimated":false}[0m                                         
+                  [1m·[0m [1m°[0m  [2m{"timestamp":"2026-09-18T22:48:59.558Z","pid":3013038,"event":"i[0m  [1m·[0m      [1m⋆[0m     [1m·[0m       
+       [1m·[0m            [1m·[0m  [2mteration:end","iteration":1,"elapsedMs":12058,"success":true,"su[0m  [2m°[0m     [2m⋆[0m              
+                                                 [2mmmary":"did[0m                           [1m°[0m                  [1m·[0m   
+                      [2m°[0m                 [2mthe work while billed to extra[0m                   [2m°[0m   [2m⋆[0m                
+  [1m·[0m                [1m✧[0m   [2musage","keyChanges":1,"keyLearnings":0,"consecutiveFailures":0,"[0m                [2m⋆[0m      
+                       [2mtotalInputTokens":12,"totalOutputTokens":7,"tokensEstimated":fal[0m      [1m·[0m                
+                                             [2mse,"commitCount":1}[0m                                              
+                       [2m{"timestamp":"2026-09-18T22:48:59.558Z","pid":3013038,"event":"o[0m                       
+   [1m°[0m        [1m·[0m                          [2mrchestrator:abort","reason":"max[0m                                       
+                   [1m·[0m    [2miterations reached (1)","iteration":1,"consecutiveFailures":0}[0m                   [1m✧[0m    
+                 [1m⋆[0m     [2m{"timestamp":"2026-09-18T22:48:59.558Z","pid":3013038,"event":"o[0m                       
+[1m⋆[0m                      [2mrchestrator:end","status":"aborted","iterations":1,"successCount[0m              [1m⋆[0m        
+                       [2m":1,"failCount":0,"totalInputTokens":12,"totalOutputTokens":7,"c[0m                       
+                                                [2mommitCount":1}[0m                           [2m✧[0m                    
+       [1m°[0m  [1m·[0m                                                                                  [1m⋆[0m                
+                          [2m[arrows to scroll, ctrl+r or esc to close, ctrl+c to exit][0m                          
+                                                                                                              

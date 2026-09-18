@@ -1,0 +1,32 @@
+                                               --- notes.md ---                                               
+           ✧                       # gnhf run: review-the-overnight-cca021                            ·    ⋆  
+                                                                                       ⋆                      
+ ·                    ·Objective: see .gnhf/runs/review-the-overnight-cca021/prompt.md                        
+                                                                                            ·                 
+   ·           ✧                               ## Iteration Log                           ·                   
+      °                                                                                                ·      
+   ⋆       °    ·                              ### Iteration 1                           ⋆      °             
+                                                                                                              
+                            **Summary:** did the work while billed to extra usage                       ·     
+                                                                                                              
+                 ·    ·                          **Changes:**                                  °              
+     °                                          - added a file                                ·               
+                                                                                              ·               
+                                                                                                              
+                  · °                     --- iteration-1.jsonl ---                      ·      ⋆     ·       
+       ·            ·  {"type":"rate_limit_event","rate_limit_info":{"status":"allowed"  °     ⋆              
+                                ,"isUsingOverage":true,"resetsAt":1789768139}}         °                  ·   
+                      °{"type":"result","subtype":"success","is_error":false,"total_cos ⋆°   ⋆                
+  ·                ✧   t_usd":0,"usage":{"input_tokens":12,"output_tokens":7,"cache_rea                ⋆      
+                       d_input_tokens":0,"cache_creation_input_tokens":0},"structured_o      ·                
+                                    utput":{"success":true,"summary":"did                                     
+                       the work while billed to extra usage","key_changes_made":["added                       
+   °        ·                           a file"],"key_learnings":[]}}                                         
+                   ·                                                                                     ✧    
+                 ⋆                             --- gnhf.log ---                                               
+⋆                      {"timestamp":"2026-09-18T22:48:47.475Z","pid":3013038,"event":"r              ⋆        
+                                          un:start","args":["review                                           
+                                       the overnight agent todo in the                   ✧                    
+       °  ·            TUI","--agent","claude","--current-branch","--max-iterations","1      ⋆                
+                          [arrows to scroll, ctrl+r or esc to close, ctrl+c to exit]                          
+                                                                                                              

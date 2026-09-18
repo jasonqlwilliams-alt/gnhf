@@ -1,0 +1,32 @@
+                                               --- notes.md ---                                               
+           ✧                       # gnhf run: review-the-overnight-cca021                            ·    ⋆  
+                                                                                       ⋆                      
+ ·                    ·Objective: see .gnhf/runs/review-the-overnight-cca021/prompt.md                        
+                                                                                            ·                 
+   ·           ✧                               ## Iteration Log                           ·                   
+      °                                                                                                ·      
+   ⋆       °    ·                         --- iteration-1.jsonl ---                      ⋆      °             
+                                                                                                              
+                                               --- gnhf.log ---                                         ·     
+                       {"timestamp":"2026-09-18T22:48:47.475Z","pid":3013038,"event":"r                       
+                 ·    ·                   un:start","args":["review                            °              
+     °                                 the overnight agent todo in the                        ·               
+                       TUI","--agent","claude","--current-branch","--max-iterations","1       ·               
+                       ","--prevent-sleep","off","--meteor-frequency","0"],"runId":"rev                       
+                  · °  iew-the-overnight-cca021","runDir":"/tmp/gnhf-tui-live-drive/rep  ·      ⋆     ·       
+       ·            ·  o/.gnhf/runs/review-the-overnight-cca021","agent":"claude","prom  °     ⋆              
+                       ptLength":42,"promptFromStdin":false,"startIteration":0,"maxIter°                  ·   
+                      °ations":1,"preventSleep":false,"worktree":false,"worktreePath":n  °   ⋆                
+  ·                ✧   ull,"currentBranch":true,"push":false,"platform":"linux","nodeVe                ⋆      
+                                   rsion":"v24.5.0","gnhfVersion":"0.1.49"}                  ·                
+                       {"timestamp":"2026-09-18T22:48:47.493Z","pid":3013038,"event":"o                       
+                       rchestrator:start","agent":"claude","runId":"review-the-overnigh                       
+   °        ·          t-cca021","startIteration":0,"maxIterations":1,"maxRateLimitWait                       
+                       Ms":86400000,"push":false,"maxConsecutiveFailures":3,"baseCommit                  ✧    
+                 ⋆     ":"ec6c05c9346d0279cd8f465c598294ba96957a71","initialCommitCount                       
+⋆                                                    ":0}                                            ⋆        
+                       {"timestamp":"2026-09-18T22:48:47.500Z","pid":3013038,"event":"i                       
+                       teration:start","iteration":1,"promptLength":2147,"consecutiveFa  ✧                    
+       °  ·            ilures":0,"totalInputTokens":0,"totalOutputTokens":0,"git":{"hea      ⋆                
+                          [arrows to scroll, ctrl+r or esc to close, ctrl+c to stop]                          
+                                                                                                              
