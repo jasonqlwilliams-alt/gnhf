@@ -19,6 +19,7 @@ import {
   parseJSONLStream,
   setupAbortHandler,
 } from "./stream-utils.js";
+import { buildWindowsClaudePermissionArgs } from "./claude-permission-prompt.js";
 
 const DEFAULT_FINAL_RESULT_EXIT_GRACE_MS = 15_000;
 
@@ -160,6 +161,7 @@ function buildClaudeArgs(
   schema: AgentOutputSchema,
   extraArgs?: string[],
   model?: string,
+  platform: NodeJS.Platform = process.platform,
 ): string[] {
   const userArgs = (extraArgs ?? []).filter(
     (arg, index, args) =>
@@ -176,6 +178,11 @@ function buildClaudeArgs(
       arg === "--permission-prompt-tool" ||
       arg.startsWith("--permission-prompt-tool="),
   );
+  const permissionArgs = userSpecifiedPermissionMode
+    ? []
+    : platform === "win32"
+      ? buildWindowsClaudePermissionArgs()
+      : ["--dangerously-skip-permissions"];
 
   return [
     ...userArgs,
@@ -187,7 +194,7 @@ function buildClaudeArgs(
     "stream-json",
     "--json-schema",
     JSON.stringify(schema),
-    ...(userSpecifiedPermissionMode ? [] : ["--dangerously-skip-permissions"]),
+    ...permissionArgs,
   ];
 }
 
@@ -283,6 +290,7 @@ export class ClaudeAgent implements Agent {
           this.schema,
           this.extraArgs,
           options?.model ?? this.model,
+          this.platform,
         ),
         {
           cwd,
