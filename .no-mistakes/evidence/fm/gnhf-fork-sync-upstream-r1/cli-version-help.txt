@@ -1,0 +1,42 @@
+=== node dist/cli.mjs --version ===
+0.1.49
+
+=== node dist/cli.mjs --help ===
+Usage: gnhf [options] [prompt]
+
+Before I go to bed, I tell my agents: good night, have fun
+
+Arguments:
+  prompt                            The objective for the coding agent
+
+Options:
+  -V, --version                     output the version number
+  --agent <agent>                   Agent to use (claude, codex, rovodev,
+                                    opencode, copilot, pi, cursor, or
+                                    acp:<target-or-command>)
+  --model <model>                   Model for the agent; overrides
+                                    agentModel.<agent> from config
+  --max-iterations <n>              Abort after N total iterations
+  --max-tokens <n>                  Abort after N total input+output+cache
+                                    tokens
+  --max-rate-limit-wait <duration>  Abort after this much total usage-limit wait
+                                    (e.g. "30m", "2h", or "0")
+  --fallback-model <model>          Retry a Claude usage-limit rejection with
+                                    this model instead of waiting
+  --stop-when <condition>           End when the agent reports this condition,
+                                    after any commit-failure repair; resumes
+                                    reuse it, pass a new value to overwrite or
+                                    "" to clear
+  --prevent-sleep <mode>            Prevent system sleep during the run ("on" or
+                                    "off")
+  --worktree                        Run in a separate git worktree (enables
+                                    multiple agents on the same repo) (default:
+                                    false)
+  --current-branch                  Run on the current branch instead of
+                                    creating a gnhf branch (default: false)
+  --push                            Push the current branch after each
+                                    successful iteration (default: false)
+  --meteor-frequency <n>            Meteor frequency from 0 to 5 (0 disables, 3
+                                    is default) (default: 3)
+  --mock                            (default: false)
+  -h, --help                        display help for command

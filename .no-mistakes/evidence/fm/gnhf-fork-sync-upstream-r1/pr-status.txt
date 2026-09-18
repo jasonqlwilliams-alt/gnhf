@@ -1,0 +1,16 @@
+=== fork jasonqlwilliams-alt/gnhf PRs (all) ===
+count: 2
+1 open: "fix(cli): preserve zero-commit worktree run records" (not this sync)
+2 open: "feat: add gnhf ECC bundle" (not this sync)
+No PR with head fm/gnhf-fork-sync-upstream-r1.
+
+=== origin heads include this sync branch? ===
+fm/gnhf-fork-sync-upstream-r1: absent
+merge SHA a3f7eb6a35abfe4a8916f54f8e697bc6560b55aa on origin heads: 0
+
+=== kunchenguid/gnhf PRs authored by jasonqlwilliams-alt ===
+Existing historical PRs only (#189, #190, #191, #195, #198, #202).
+No new PR from this sync run.
+
+This test phase is forbidden from creating or pushing a PR.
+The outer executor owns the later push/PR phases.

@@ -1,0 +1,29 @@
+=== origin (jasonqlwilliams-alt/gnhf) heads ===
+0a49c3dcb54e3b94cd223b307b6a124b732d6a48	refs/heads/ecc-tools/gnhf-1788089728274
+6f8c22415c98876fa425d06bb9ee7f2b4ed6888d	refs/heads/fix/agents-acp-output-parsing
+fd1edd2b8dd3507b64386ec4c900516360ff9790	refs/heads/fm/gnhf-claude-error-surface-c1
+74cdae979005a5043a247bac8818b8e1a154fd0d	refs/heads/fm/gnhf-empty-response-recovery-o1
+c68a596f2c4312c2ef086960f209e065322a4586	refs/heads/fm/gnhf-pi-json-recovery-p1
+59543108740c4a375d9749f63d15a16f705a0f62	refs/heads/fm/gnhf-shared-stderr-defect-s2
+90ec6c6712d805a171b80894441119da51b4370a	refs/heads/fm/gnhf-worktree-preservation-w1
+2966d00809d0166dc105f50c671c44263805f85a	refs/heads/fm/gnhf-worktree-selfdelete-d2
+b26e932f84402d614fcaf4d66bcbf18fd9c01c40	refs/heads/fm/gnhf-zerocommit-log-destruction-z1
+0227fe415d38e6df0fad4828c7999ba2a3b065de	refs/heads/fm/upstream-sync-0227fe415d38e6df0fad4828c7999ba2a3b065de
+49982a9cbc56473177b99c98d0b6b880f47af6f3	refs/heads/fm/upstream-sync-49982a9cbc56473177b99c98d0b6b880f47af6f3
+504dac462bbba1e899c2959e877f47499eb72295	refs/heads/fm/upstream-sync-504dac462bbba1e899c2959e877f47499eb72295
+693f1d564a31fa419c0c0989aad8fb89a48578df	refs/heads/fm/upstream-sync-693f1d564a31fa419c0c0989aad8fb89a48578df
+7d0ebb17b05586bab929c05a2aa23e658530a7e7	refs/heads/main
+392ff8bcc734160ef8a1b701304077a6a9063465	refs/heads/no-mistakes/evidence
+
+=== kunchenguid/gnhf heads (must not contain merge a3f7eb6) ===
+6f8c22415c98876fa425d06bb9ee7f2b4ed6888d	refs/heads/fix/agents-acp-output-parsing
+0227fe415d38e6df0fad4828c7999ba2a3b065de	refs/heads/main
+fa468a0660a7805f3ca1eb6b73cf0e47a1d88a32	refs/heads/no-mistakes/evidence
+
+=== merge SHA presence ===
+a3f7eb6 on origin heads: 0
+a3f7eb6 on kunchenguid heads: 0
+
+=== kunchenguid/main ===
+0227fe415d38e6df0fad4828c7999ba2a3b065de	refs/heads/main
+expected: 0227fe415d38e6df0fad4828c7999ba2a3b065de

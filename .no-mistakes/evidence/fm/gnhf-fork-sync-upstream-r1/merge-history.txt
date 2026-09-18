@@ -1,0 +1,51 @@
+=== merge commit ===
+commit a3f7eb6a35abfe4a8916f54f8e697bc6560b55aa
+parents 7d0ebb17b05586bab929c05a2aa23e658530a7e7 0227fe415d38e6df0fad4828c7999ba2a3b065de
+subject Merge upstream/main (gnhf 0.1.49) into jasonqlwilliams-alt/gnhf.
+
+Keep the fork's 11 unique commits as history and take upstream's landed #189/#190 implementations instead of re-introducing the fork duplicates.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+
+
+=== first parent (fork main / base) ===
+7d0ebb1 Merge fm/gnhf-claude-error-surface-c1 into main
+
+=== second parent (upstream 0.1.49) ===
+0227fe4 chore(main): release gnhf 0.1.49 (#224)
+
+=== local unique commits (count + SHAs) ===
+11
+7d0ebb17b05586bab929c05a2aa23e658530a7e7 Merge fm/gnhf-claude-error-surface-c1 into main
+4e32c5a70565518c1dfea516aec6b6b45e6384c7 Merge fm/gnhf-worktree-preservation-w1 into main
+fd1edd2b8dd3507b64386ec4c900516360ff9790 no-mistakes: apply CI fixes
+c48faf7aa7390fc2e5ad872bd47c09fa1343177a no-mistakes(document): Format Claude failure e2e coverage
+3c6782dc6fab18369507538f75a8891a29fd733e no-mistakes(document): clarify worktree preservation holds on all exit paths
+050d4aa29b6e732fe245650a0d6e9a4064a009f8 no-mistakes(review): narrow claude permanent-error scope, bound raw tail, add e2e
+54456258af691b714909673ca92cecb191a7affb no-mistakes(review): report preserved worktree path on shutdown timeout
+9960a058fdb87ae296e9d6a2188648db3f2575b5 test: exercise force-shutdown worktree cleanup
+7ee4277936cd5bc2800964318bafedb7eb8b98a0 style: fix prettier formatting
+f4b2bd41ebe278c4943d0e4d7b9ef228a7b652b9 fix: preserve worktree with commits on force-shutdown (#167)
+2aa5f0046676ccdbcdbba961aa36afe3b3f5535d fix(claude): surface real error text on non-zero exit
+
+=== origin/main still at first parent (no rewrite/force-push of fork main) ===
+7d0ebb17b05586bab929c05a2aa23e658530a7e7
+7d0ebb17b05586bab929c05a2aa23e658530a7e7
+
+=== 11 local SHAs identical on origin/main and merge first-parent ===
+(empty comm output means identical SHA set)
+
+=== ancestors: upstream #189/#190 and fork duplicates both present (history kept) ===
+upstream #190 3041614 is ancestor
+upstream #189 c12cdbf is ancestor
+fork claude 2aa5f00 is ancestor
+fork worktree f4b2bd4 is ancestor
+
+=== conflict-file trees match upstream (took landed implementations) ===
+IDENTICAL src/core/agents/claude.ts
+IDENTICAL src/cli.ts
+IDENTICAL e2e/fixtures/mock-claude-cli.mjs
+IDENTICAL src/core/agents/claude.test.ts
+IDENTICAL src/cli.test.ts
+IDENTICAL e2e/e2e.test.ts
+IDENTICAL AGENTS.md

@@ -1,0 +1,12 @@
+=== commits in merge range matching 166 or resize ===
+(empty means no matching commit subjects)
+
+=== upstream issue 166 still open (not shipped) ===
+number: 166
+title: UI maflormed after terminal resizing
+state: open
+
+=== upstream PR 230 is closed unmerged and targets #192, not #166 ===
+230 fix(renderer): reflow moon strip to narrow terminals
+merged: no
+Fixes #192
