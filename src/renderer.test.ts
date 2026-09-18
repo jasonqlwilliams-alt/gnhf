@@ -1370,3 +1370,273 @@ describe("Renderer terminal title", () => {
     }
   });
 });
+
+describe("Renderer resize", () => {
+  const TICK_MS = 200;
+  const LARGE = { columns: 120, rows: 40 };
+  const SMALL = { columns: 80, rows: 24 };
+
+  function runningState(): OrchestratorState {
+    return {
+      status: "running",
+      gracefulStopRequested: false,
+      interruptHint: "resume",
+      currentIteration: 1,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
+      tokensEstimated: false,
+      commitCount: 0,
+      iterations: [],
+      successCount: 0,
+      failCount: 0,
+      consecutiveFailures: 0,
+      consecutiveErrors: 0,
+      startTime: new Date(0),
+      waitingUntil: null,
+      lastMessage: null,
+    };
+  }
+
+  function joinedWrites(stdoutWrite: ReturnType<typeof vi.spyOn>): string {
+    return stdoutWrite.mock.calls
+      .map((args: unknown[]) => String(args[0]))
+      .join("");
+  }
+
+  function createScreen(rows: number, cols: number, fill: string): string[][] {
+    return Array.from({ length: rows }, () =>
+      Array.from({ length: cols }, () => fill),
+    );
+  }
+
+  function applyAnsi(screen: string[][], output: string): void {
+    const rows = screen.length;
+    const cols = screen[0]?.length ?? 0;
+    let r = 0;
+    let c = 0;
+    let i = 0;
+
+    const eraseFromCursorToEnd = () => {
+      if (r >= rows) return;
+      for (let x = c; x < cols; x++) screen[r][x] = " ";
+      for (let y = r + 1; y < rows; y++) {
+        screen[y].fill(" ");
+      }
+    };
+
+    const eraseDisplay = (mode: number) => {
+      if (mode === 2) {
+        for (const row of screen) row.fill(" ");
+        return;
+      }
+      if (mode === 1) {
+        for (let y = 0; y < r && y < rows; y++) screen[y].fill(" ");
+        if (r < rows) {
+          for (let x = 0; x <= c && x < cols; x++) screen[r][x] = " ";
+        }
+        return;
+      }
+      eraseFromCursorToEnd();
+    };
+
+    while (i < output.length) {
+      if (output[i] === "\u001b") {
+        if (output[i + 1] === "]") {
+          const bel = output.indexOf("\u0007", i);
+          i = bel === -1 ? output.length : bel + 1;
+          continue;
+        }
+        if (output[i + 1] === "[") {
+          const rest = output.slice(i + 2);
+          const cmdOffset = rest.search(/[A-Za-z]/);
+          if (cmdOffset === -1) break;
+          const params = rest.slice(0, cmdOffset);
+          const cmd = rest[cmdOffset];
+          i += 3 + cmdOffset;
+          if (cmd === "H" || cmd === "f") {
+            const [rowPart, colPart] = params.split(";");
+            r = Math.max(0, (Number(rowPart) || 1) - 1);
+            c = Math.max(0, (Number(colPart) || 1) - 1);
+          } else if (cmd === "J") {
+            eraseDisplay(params === "" ? 0 : Number(params));
+          } else if (cmd === "K") {
+            if (r >= rows) continue;
+            const mode = params === "" ? 0 : Number(params);
+            if (mode === 2) screen[r].fill(" ");
+            else if (mode === 1) {
+              for (let x = 0; x <= c && x < cols; x++) screen[r][x] = " ";
+            } else {
+              for (let x = c; x < cols; x++) screen[r][x] = " ";
+            }
+          }
+          continue;
+        }
+        i += 1;
+        continue;
+      }
+      if (output[i] === "\n") {
+        r += 1;
+        c = 0;
+        i += 1;
+        continue;
+      }
+      if (output[i] === "\r") {
+        c = 0;
+        i += 1;
+        continue;
+      }
+      if (output.charCodeAt(i) < 32) {
+        i += 1;
+        continue;
+      }
+      if (r < rows && c < cols) screen[r][c] = output[i];
+      c += 1;
+      i += 1;
+    }
+  }
+
+  function cellsOutside(
+    screen: string[][],
+    rows: number,
+    cols: number,
+  ): Array<{ row: number; col: number; char: string }> {
+    const found: Array<{ row: number; col: number; char: string }> = [];
+    for (let row = 0; row < screen.length; row++) {
+      for (let col = 0; col < screen[row].length; col++) {
+        if (row < rows && col < cols) continue;
+        const char = screen[row][col];
+        if (char !== " ") found.push({ row, col, char });
+      }
+    }
+    return found;
+  }
+
+  function hasFullEraseThenRedraw(output: string): boolean {
+    const esc = "\u001b";
+    const eraseAt = [
+      output.indexOf(`${esc}[2J${esc}[H`),
+      output.indexOf(`${esc}[H${esc}[J`),
+      output.indexOf(`${esc}[H${esc}[0J`),
+      output.indexOf(`${esc}[J${esc}[H`),
+      output.indexOf(`${esc}[0J${esc}[H`),
+    ].filter((idx) => idx >= 0);
+    if (eraseAt.length === 0) return false;
+    return /[A-Za-z]/.test(output.slice(Math.min(...eraseAt)));
+  }
+
+  function runResizeRenderer(
+    body: (args: {
+      stdoutWrite: ReturnType<typeof vi.spyOn>;
+      setSize: (size: { columns: number; rows: number }) => void;
+      tick: () => void;
+    }) => void,
+  ): void {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const state = runningState();
+    const orchestrator = Object.assign(new EventEmitter(), {
+      getState: vi.fn(() => state),
+      stop: vi.fn(),
+    }) as unknown as Orchestrator;
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    const originalStdinTty = Object.getOwnPropertyDescriptor(
+      process.stdin,
+      "isTTY",
+    );
+    const originalColumns = Object.getOwnPropertyDescriptor(
+      process.stdout,
+      "columns",
+    );
+    const originalRows = Object.getOwnPropertyDescriptor(
+      process.stdout,
+      "rows",
+    );
+
+    const setSize = (size: { columns: number; rows: number }) => {
+      Object.defineProperty(process.stdout, "columns", {
+        configurable: true,
+        value: size.columns,
+      });
+      Object.defineProperty(process.stdout, "rows", {
+        configurable: true,
+        value: size.rows,
+      });
+    };
+
+    Object.defineProperty(process.stdin, "isTTY", {
+      configurable: true,
+      value: false,
+    });
+    setSize(LARGE);
+
+    const renderer = new Renderer(orchestrator, "ship it", "claude", vi.fn());
+
+    try {
+      renderer.start();
+      body({
+        stdoutWrite,
+        setSize,
+        tick: () => {
+          vi.advanceTimersByTime(TICK_MS);
+        },
+      });
+      renderer.stop();
+    } finally {
+      if (originalRows)
+        Object.defineProperty(process.stdout, "rows", originalRows);
+      if (originalColumns)
+        Object.defineProperty(process.stdout, "columns", originalColumns);
+      if (originalStdinTty)
+        Object.defineProperty(process.stdin, "isTTY", originalStdinTty);
+      random.mockRestore();
+      stdoutWrite.mockRestore();
+      vi.useRealTimers();
+    }
+  }
+
+  it("erases leftover cells from the previous frame when the terminal shrinks", () => {
+    runResizeRenderer(({ stdoutWrite, setSize, tick }) => {
+      const screen = createScreen(LARGE.rows, LARGE.columns, " ");
+      applyAnsi(screen, joinedWrites(stdoutWrite));
+      const leftoverBefore = cellsOutside(screen, SMALL.rows, SMALL.columns);
+      expect(leftoverBefore.length).toBeGreaterThan(0);
+
+      stdoutWrite.mockClear();
+      setSize(SMALL);
+      tick();
+      const shrinkOutput = joinedWrites(stdoutWrite);
+      applyAnsi(screen, shrinkOutput);
+
+      expect(hasFullEraseThenRedraw(shrinkOutput)).toBe(true);
+      expect(cellsOutside(screen, SMALL.rows, SMALL.columns)).toEqual([]);
+      expect(stripAnsi(shrinkOutput)).toContain("ship it");
+    });
+  });
+
+  it("erases leftover cells after shrinking and restoring the original size", () => {
+    runResizeRenderer(({ stdoutWrite, setSize, tick }) => {
+      const screen = createScreen(LARGE.rows, LARGE.columns, "#");
+      applyAnsi(screen, joinedWrites(stdoutWrite));
+
+      stdoutWrite.mockClear();
+      setSize(SMALL);
+      tick();
+      applyAnsi(screen, joinedWrites(stdoutWrite));
+
+      stdoutWrite.mockClear();
+      setSize(LARGE);
+      tick();
+      const restoreOutput = joinedWrites(stdoutWrite);
+      applyAnsi(screen, restoreOutput);
+
+      expect(hasFullEraseThenRedraw(restoreOutput)).toBe(true);
+      expect(screen.some((row) => row.includes("#"))).toBe(false);
+      expect(stripAnsi(restoreOutput)).toContain("ship it");
+    });
+  });
+});
