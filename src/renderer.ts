@@ -13,6 +13,14 @@ import { formatTokens, getTotalTokenCount } from "./utils/tokens.js";
 import { wordWrap } from "./utils/wordwrap.js";
 import type { Orchestrator, OrchestratorState } from "./core/orchestrator.js";
 import {
+  clampLogReviewOffset,
+  formatRunLogReviewLines,
+  refreshRunLogReview,
+  visibleLogReviewLines,
+  type LogReviewSection,
+  type RunLogReviewCache,
+} from "./core/log-review.js";
+import {
   type Cell,
   type Style,
   textToCells,
@@ -34,21 +42,37 @@ const TICK_MS = 200;
 const MOON_PHASE_PERIOD = 1600;
 const MAX_MSG_LINES = 3;
 const MAX_MSG_LINE_LEN = CONTENT_WIDTH;
-const RESUME_HINT = "[ctrl+o to expand, ctrl+c to stop, gnhf again to resume]";
+const RESUME_HINT =
+  "[ctrl+o to expand, ctrl+r to review log, ctrl+c to stop, gnhf again to resume]";
 const UNFOLDED_RESUME_HINT =
   "[ctrl+o or esc to fold, ctrl+c to stop, gnhf again to resume]";
 const GRACEFUL_STOP_HINT =
   "[graceful stop requested, ctrl+c again to force stop, gnhf again to resume]";
-const DONE_HINT = "[ctrl+c to exit]";
+const DONE_HINT = "[ctrl+r to review log, ctrl+c to exit]";
+const REVIEW_HINT =
+  "[arrows to scroll, ctrl+r or esc to close, ctrl+c to stop]";
+const REVIEW_GRACEFUL_HINT =
+  "[arrows to scroll, ctrl+r or esc to close, ctrl+c again to force stop]";
+const REVIEW_DONE_HINT =
+  "[arrows to scroll, ctrl+r or esc to close, ctrl+c to exit]";
 const CTRL_C = 3;
 const CTRL_L = 12;
 const CTRL_O = 15;
+const CTRL_R = 18;
 const ESC = 27;
 
 export type RendererExitReason = "interrupted" | "stopped";
 
 export interface RendererOptions {
   meteorFrequency?: number;
+  runDir?: string;
+}
+
+export interface LogReviewView {
+  sections: LogReviewSection[];
+  offset: number;
+  lines?: string[];
+  wrapWidth?: number;
 }
 
 // ── ANSI helpers ─────────────────────────────────────────────
@@ -530,9 +554,15 @@ function renderResumeHintCells(
   width: number,
   interruptHint: OrchestratorState["interruptHint"],
   messageUnfolded = false,
+  logReviewOpen = false,
 ): Cell[] {
-  const hint =
-    interruptHint === "exit"
+  const hint = logReviewOpen
+    ? interruptHint === "exit"
+      ? REVIEW_DONE_HINT
+      : interruptHint === "force-stop"
+        ? REVIEW_GRACEFUL_HINT
+        : REVIEW_HINT
+    : interruptHint === "exit"
       ? DONE_HINT
       : interruptHint === "force-stop"
         ? GRACEFUL_STOP_HINT
@@ -540,6 +570,48 @@ function renderResumeHintCells(
           ? UNFOLDED_RESUME_HINT
           : RESUME_HINT;
   return centerLineCells(textToCells(hint, "dim"), width);
+}
+
+function renderLogReviewCells(
+  review: LogReviewView,
+  width: number,
+  height: number,
+): Cell[][] {
+  if (height <= 0) return [];
+  const lines =
+    review.lines !== undefined && review.wrapWidth === width
+      ? review.lines
+      : formatRunLogReviewLines(review.sections, width);
+  return visibleLogReviewLines(lines, review.offset, height).map((line) =>
+    line ? textToCells(line, "dim") : [],
+  );
+}
+
+function reviewScrollAction(
+  data: Buffer,
+): "up" | "down" | "pageup" | "pagedown" | "home" | "end" | null {
+  const seq = data.toString("utf8");
+  if (seq === "\x1b[A" || seq === "\x1bOA") return "up";
+  if (seq === "\x1b[B" || seq === "\x1bOB") return "down";
+  if (seq === "\x1b[5~") return "pageup";
+  if (seq === "\x1b[6~") return "pagedown";
+  if (
+    seq === "\x1b[H" ||
+    seq === "\x1b[1~" ||
+    seq === "\x1b[7~" ||
+    seq === "\x1bOH"
+  ) {
+    return "home";
+  }
+  if (
+    seq === "\x1b[F" ||
+    seq === "\x1b[4~" ||
+    seq === "\x1b[8~" ||
+    seq === "\x1bOF"
+  ) {
+    return "end";
+  }
+  return null;
 }
 
 // ── Build full frame (cell-based) ────────────────────────────
@@ -685,6 +757,7 @@ export function buildFrameCells(
   bottomMeteors: Meteor[] = [],
   sideMeteors: Meteor[] = [],
   messageUnfolded = false,
+  logReview: LogReviewView | null = null,
 ): Cell[][] {
   const elapsed = formatElapsed(now - state.startTime.getTime());
   const reservedBottomRows = 2;
@@ -694,16 +767,18 @@ export function buildFrameCells(
     Math.floor((terminalWidth - CONTENT_WIDTH) / 2),
   );
   const contentWidth = Math.max(1, terminalWidth - 2 * sideWidth);
-  const contentRows = buildContentCells(
-    prompt,
-    agentName,
-    state,
-    elapsed,
-    now,
-    availableHeight,
-    contentWidth,
-    messageUnfolded,
-  );
+  const contentRows = logReview
+    ? renderLogReviewCells(logReview, contentWidth, availableHeight)
+    : buildContentCells(
+        prompt,
+        agentName,
+        state,
+        elapsed,
+        now,
+        availableHeight,
+        contentWidth,
+        messageUnfolded,
+      );
 
   while (contentRows.length < Math.min(BASE_CONTENT_ROWS, availableHeight)) {
     contentRows.push([]);
@@ -772,7 +847,12 @@ export function buildFrameCells(
   }
 
   frame.push(
-    renderResumeHintCells(terminalWidth, state.interruptHint, messageUnfolded),
+    renderResumeHintCells(
+      terminalWidth,
+      state.interruptHint,
+      messageUnfolded,
+      logReview !== null,
+    ),
   );
   frame.push(emptyCells(terminalWidth));
 
@@ -804,6 +884,7 @@ export function buildFrame(
   terminalWidth: number,
   terminalHeight: number,
   messageUnfolded = false,
+  logReview: LogReviewView | null = null,
 ): string {
   const cells = buildFrameCells(
     prompt,
@@ -819,6 +900,7 @@ export function buildFrame(
     [],
     [],
     messageUnfolded,
+    logReview,
   );
   return "\x1b[H" + cells.map(rowToString).join("\n");
 }
@@ -848,6 +930,9 @@ export class Renderer {
   private isFirstFrame = true;
   private needsFullRedraw = false;
   private messageUnfolded = false;
+  private logReview: LogReviewView | null = null;
+  private logReviewCache: RunLogReviewCache | null = null;
+  private runDir: string | undefined;
   private seedTop: number;
   private seedBottom: number;
   private seedSide: number;
@@ -875,6 +960,7 @@ export class Renderer {
       0,
       Math.floor(options.meteorFrequency ?? DEFAULT_METEOR_FREQUENCY),
     );
+    this.runDir = options.runDir;
     this.state = orchestrator.getState();
     this.seedTop = Math.floor(Math.random() * 2147483646) + 1;
     this.seedBottom = Math.floor(Math.random() * 2147483646) + 1;
@@ -902,16 +988,31 @@ export class Renderer {
           this.render();
           return;
         }
+        if (data[0] === CTRL_R) {
+          this.toggleLogReview();
+          return;
+        }
         if (data[0] === CTRL_O) {
+          if (this.logReview) return;
           this.messageUnfolded = !this.messageUnfolded;
           this.needsFullRedraw = true;
           this.render();
           return;
         }
-        if (this.messageUnfolded && data.length === 1 && data[0] === ESC) {
-          this.messageUnfolded = false;
-          this.needsFullRedraw = true;
-          this.render();
+        if (data[0] === ESC) {
+          if (this.logReview) {
+            if (data.length === 1) {
+              this.closeLogReview();
+              return;
+            }
+            this.handleLogReviewScroll(data);
+            return;
+          }
+          if (this.messageUnfolded && data.length === 1) {
+            this.messageUnfolded = false;
+            this.needsFullRedraw = true;
+            this.render();
+          }
         }
       });
     }
@@ -1027,6 +1128,7 @@ export class Renderer {
       this.bottomMeteors,
       this.sideMeteors,
       this.messageUnfolded,
+      this.currentLogReview(),
     );
 
     if (this.isFirstFrame || resized || this.needsFullRedraw) {
@@ -1064,5 +1166,84 @@ export class Renderer {
     }
     process.stdout.write(emitTerminalTitle(nextTitle));
     this.prevTitle = nextTitle;
+  }
+
+  private currentLogReview(): LogReviewView | null {
+    if (!this.logReview || this.runDir === undefined) {
+      return this.logReview;
+    }
+    this.logReview = this.refreshOpenLogReview(this.logReview.offset);
+    return this.logReview;
+  }
+
+  private closeLogReview(): void {
+    this.logReview = null;
+    this.logReviewCache = null;
+    this.needsFullRedraw = true;
+    this.render();
+  }
+
+  private refreshOpenLogReview(offset: number): LogReviewView {
+    const wrapWidth = this.reviewWrapWidth();
+    this.logReviewCache = refreshRunLogReview(
+      this.runDir as string,
+      wrapWidth,
+      this.logReviewCache,
+    );
+    return {
+      sections: this.logReviewCache.sections,
+      lines: this.logReviewCache.lines,
+      wrapWidth,
+      offset: clampLogReviewOffset(
+        offset,
+        this.logReviewCache.lines.length,
+        this.reviewPageSize(),
+      ),
+    };
+  }
+
+  private toggleLogReview(): void {
+    if (this.logReview) {
+      this.closeLogReview();
+      return;
+    }
+    if (this.runDir === undefined) return;
+    this.logReview = this.refreshOpenLogReview(0);
+    this.needsFullRedraw = true;
+    this.render();
+  }
+
+  private handleLogReviewScroll(data: Buffer): void {
+    if (!this.logReview || this.runDir === undefined) return;
+    const action = reviewScrollAction(data);
+    if (action === null) return;
+
+    const pageSize = this.reviewPageSize();
+    const view = this.refreshOpenLogReview(this.logReview.offset);
+    const lines = view.lines ?? [];
+    let offset = view.offset;
+    if (action === "up") offset -= 1;
+    else if (action === "down") offset += 1;
+    else if (action === "pageup") offset -= Math.max(1, pageSize - 1);
+    else if (action === "pagedown") offset += Math.max(1, pageSize - 1);
+    else if (action === "home") offset = 0;
+    else offset = lines.length;
+    this.logReview = {
+      ...view,
+      offset: clampLogReviewOffset(offset, lines.length, pageSize),
+    };
+    this.needsFullRedraw = true;
+    this.render();
+  }
+
+  private reviewPageSize(): number {
+    const height = process.stdout.rows || 24;
+    return Math.max(1, height - 2);
+  }
+
+  private reviewWrapWidth(): number {
+    const width = process.stdout.columns || 80;
+    const sideWidth = Math.max(0, Math.floor((width - CONTENT_WIDTH) / 2));
+    return Math.max(1, width - 2 * sideWidth);
   }
 }

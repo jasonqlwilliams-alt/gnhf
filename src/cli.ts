@@ -1148,7 +1148,7 @@ program
         prompt,
         config.agent,
         handleSigInt,
-        { meteorFrequency: options.meteorFrequency },
+        { meteorFrequency: options.meteorFrequency, runDir: runInfo.runDir },
       );
       renderer.start();
 

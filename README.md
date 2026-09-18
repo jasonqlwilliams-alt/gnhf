@@ -159,6 +159,7 @@ After installing from npm, the skill is available under the installed package di
 - **Graceful interrupts** - in the interactive TUI, the first Ctrl+C requests a graceful stop and lets the current iteration finish (or ends backoff early), the second Ctrl+C force-stops immediately, and `SIGTERM` also force-stops immediately
 - **Display refresh** - in the interactive TUI, Ctrl+L erases and redraws the current frame so you can recover a garbled display without interrupting the run
 - **Live log unfold** - in the interactive TUI, Ctrl+O expands the three-line agent pane so you can read more of the live log without stopping the run; press Ctrl+O again or Escape to fold it back
+- **Log review** - in the interactive TUI, Ctrl+R opens a scrollable view of the existing local run notes, per-iteration agent logs, and `gnhf.log`; use arrows, Page Up/Down, Home, and End to move, and Ctrl+R or Escape to close. This works during a live run and on a finished run's done screen, so a morning review does not require a separate shell
 - **Exit summary** - after shutdown cleanup, gnhf prints a permanent stdout summary with the final branch, elapsed time, iteration and token totals, branch diff stats, notes/debug-log paths, and review commands
 - **Shared memory** - the agent reads `notes.md` (built up from prior iterations) to communicate across iterations
 - **Local run metadata** - gnhf stores prompt, notes, stop conditions, commit-message convention metadata, and a final `end-state.json` sidecar with the exit status, stop condition, agent error, and counters under `.gnhf/runs/`, and ignores it locally, so your branch only contains intentional work
@@ -338,6 +339,7 @@ A run is never aborted because that mechanism is unavailable; instead the exit s
 ## Debug Logs
 
 Every run writes a JSONL debug log to `.gnhf/runs/<runId>/gnhf.log` alongside `notes.md`. Lifecycle events for the orchestrator, agent, and HTTP requests are captured with elapsed timings and (for failures) the full `error.cause` chain, which is what you need to tell a bare `TypeError: fetch failed` apart from an undici `UND_ERR_HEADERS_TIMEOUT`. The agent's own streaming output still goes to the per-iteration `iteration-<n>.jsonl` file next to it.
+In the interactive TUI, Ctrl+R scrolls those same local files without leaving the run or opening a shell.
 Raw ACP command specs are redacted as `acp:custom`/`custom` in debug logs and related errors, so local paths or secrets in custom commands are not written to `gnhf.log`.
 
 Including a snippet of `gnhf.log` is the single most useful thing you can attach when filing an issue.

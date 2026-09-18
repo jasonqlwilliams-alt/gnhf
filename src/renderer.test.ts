@@ -1,4 +1,7 @@
 import { EventEmitter } from "node:events";
+import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, expect, vi } from "vitest";
 import * as renderer from "./renderer.js";
 import {
@@ -407,7 +410,7 @@ describe("buildFrame", () => {
     const hintLine = stripAnsi(rawHintLine);
 
     expect(hintLine.trim()).toBe(
-      "[ctrl+o to expand, ctrl+c to stop, gnhf again to resume]",
+      "[ctrl+o to expand, ctrl+r to review log, ctrl+c to stop, gnhf again to resume]",
     );
     expect(rawHintLine).toContain("\x1b[2m");
     expect(stripAnsi(lines.at(-1) ?? "").trim()).toBe("");
@@ -1135,6 +1138,158 @@ describe("buildContentCells adaptive height", () => {
   });
 });
 
+describe("buildFrame log review", () => {
+  const reviewState: OrchestratorState = {
+    status: "running",
+    gracefulStopRequested: false,
+    interruptHint: "resume",
+    currentIteration: 1,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalCacheReadTokens: 0,
+    totalCacheCreationTokens: 0,
+    tokensEstimated: false,
+    commitCount: 0,
+    iterations: [],
+    successCount: 0,
+    failCount: 0,
+    consecutiveFailures: 0,
+    consecutiveErrors: 0,
+    startTime: new Date("2026-01-01T00:00:00Z"),
+    waitingUntil: null,
+    lastMessage: "reading files",
+  };
+
+  const toText = (rows: ReturnType<typeof buildFrameCells>): string =>
+    rows.map(rowToString).map(stripAnsi).join("\n");
+
+  it("shows a scrollable local notes and log view instead of the live lastMessage", () => {
+    const frame = buildFrameCells(
+      "ship it",
+      "claude",
+      reviewState,
+      [],
+      [],
+      [],
+      0,
+      80,
+      24,
+      [],
+      [],
+      [],
+      false,
+      {
+        sections: [
+          {
+            name: "notes.md",
+            body: "### Iteration 1\nadded tests",
+            truncated: false,
+          },
+          {
+            name: "iteration-1.jsonl",
+            body: "assistant: inspecting repo",
+            truncated: false,
+          },
+        ],
+        offset: 0,
+      },
+    );
+    const text = toText(frame);
+
+    expect(text).toContain("--- notes.md ---");
+    expect(text).toContain("added tests");
+    expect(text).toContain("inspecting repo");
+    expect(text).not.toContain("reading files");
+    expect(text).toContain("arrows to scroll");
+    expect(text).toContain("ctrl+r or esc to close");
+  });
+
+  it("scrolls later log lines into view", () => {
+    const body = Array.from(
+      { length: 40 },
+      (_, index) => `log-event-${String(index + 1).padStart(2, "0")}`,
+    ).join("\n");
+    const sections = [{ name: "gnhf.log", body, truncated: false }];
+
+    const top = toText(
+      buildFrameCells(
+        "ship it",
+        "claude",
+        reviewState,
+        [],
+        [],
+        [],
+        0,
+        80,
+        24,
+        [],
+        [],
+        [],
+        false,
+        { sections, offset: 0 },
+      ),
+    );
+    const scrolled = toText(
+      buildFrameCells(
+        "ship it",
+        "claude",
+        reviewState,
+        [],
+        [],
+        [],
+        0,
+        80,
+        24,
+        [],
+        [],
+        [],
+        false,
+        { sections, offset: 20 },
+      ),
+    );
+
+    expect(top).toContain("log-event-01");
+    expect(top).not.toContain("log-event-40");
+    expect(scrolled).not.toContain("log-event-01");
+    expect(scrolled).toContain("log-event-40");
+  });
+
+  it("keeps morning review available on a finished run", () => {
+    const frame = buildFrameCells(
+      "ship it",
+      "claude",
+      {
+        ...reviewState,
+        status: "aborted",
+        interruptHint: "exit",
+        lastMessage: "stop condition met",
+      },
+      [],
+      [],
+      [],
+      0,
+      80,
+      24,
+      [],
+      [],
+      [],
+      false,
+      {
+        sections: [
+          { name: "notes.md", body: "morning todo", truncated: false },
+        ],
+        offset: 0,
+      },
+    );
+    const text = toText(frame);
+
+    expect(text).toContain("morning todo");
+    expect(text).toContain("ctrl+r or esc to close");
+    expect(text).toContain("ctrl+c to exit");
+    expect(text).not.toContain("stop condition met");
+  });
+});
+
 describe("Renderer ctrl+c", () => {
   async function runRendererCtrlCTest(state: OrchestratorState): Promise<{
     onInterrupt: ReturnType<typeof vi.fn>;
@@ -1571,6 +1726,385 @@ describe("Renderer ctrl+o log unfold", () => {
         Object.defineProperty(process.stdout, "columns", originalColumns);
       stdoutWrite.mockRestore();
       vi.useRealTimers();
+    }
+  });
+});
+
+describe("Renderer ctrl+r log review", () => {
+  const longMessage =
+    "Line one of the message\nLine two of the message\nLine three of the message\nLine four should be cut";
+
+  function createRunDir(): string {
+    const runDir = mkdtempSync(join(tmpdir(), "gnhf-tui-review-"));
+    writeFileSync(
+      join(runDir, "notes.md"),
+      "### Iteration 1\nreview me in the morning\n",
+    );
+    writeFileSync(
+      join(runDir, "iteration-1.jsonl"),
+      `${Array.from({ length: 40 }, (_, index) => `{"text":"agent-line-${index + 1}"}\n`).join("")}`,
+    );
+    writeFileSync(join(runDir, "gnhf.log"), '{"event":"orchestrator:end"}\n');
+    return runDir;
+  }
+
+  function startInteractiveRenderer(options: {
+    state: OrchestratorState;
+    runDir?: string;
+  }): {
+    sendKey: (data: Buffer | number) => void;
+    written: () => string;
+    onInterrupt: ReturnType<typeof vi.fn>;
+    orchestratorStop: ReturnType<typeof vi.fn>;
+    stdoutWrite: ReturnType<typeof vi.spyOn>;
+    renderer: Renderer;
+    restore: () => void;
+  } {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    let dataHandler: ((data: Buffer) => void) | null = null;
+    const onInterrupt = vi.fn();
+    const orchestratorStop = vi.fn();
+    const orchestrator = Object.assign(new EventEmitter(), {
+      getState: vi.fn(() => options.state),
+      stop: orchestratorStop,
+    }) as unknown as Orchestrator;
+
+    const originalIsTTY = process.stdin.isTTY;
+    const originalSetRawMode = (
+      process.stdin as NodeJS.ReadStream & {
+        setRawMode?: (mode: boolean) => void;
+      }
+    ).setRawMode;
+    const originalResume = process.stdin.resume;
+    const originalPause = process.stdin.pause;
+    const originalOn = process.stdin.on;
+    const originalRemoveAllListeners = process.stdin.removeAllListeners;
+    const originalColumns = Object.getOwnPropertyDescriptor(
+      process.stdout,
+      "columns",
+    );
+    const originalRows = Object.getOwnPropertyDescriptor(
+      process.stdout,
+      "rows",
+    );
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+
+    Object.defineProperty(process.stdin, "isTTY", {
+      configurable: true,
+      value: true,
+    });
+    Object.defineProperty(process.stdin, "setRawMode", {
+      configurable: true,
+      value: vi.fn(() => process.stdin),
+    });
+    process.stdin.resume = vi.fn();
+    process.stdin.pause = vi.fn();
+    process.stdin.on = vi.fn(
+      (event: string, handler: (...args: unknown[]) => void) => {
+        if (event === "data") {
+          dataHandler = handler as (data: Buffer) => void;
+        }
+        return process.stdin;
+      },
+    ) as typeof process.stdin.on;
+    process.stdin.removeAllListeners = vi.fn(() => process.stdin);
+    Object.defineProperty(process.stdout, "columns", {
+      configurable: true,
+      value: 80,
+    });
+    Object.defineProperty(process.stdout, "rows", {
+      configurable: true,
+      value: 24,
+    });
+
+    const renderer = new Renderer(
+      orchestrator,
+      "ship it",
+      "claude",
+      onInterrupt,
+      { runDir: options.runDir },
+    );
+    renderer.start();
+
+    return {
+      sendKey: (data) => {
+        const buffer = typeof data === "number" ? Buffer.from([data]) : data;
+        (dataHandler as unknown as (data: Buffer) => void)(buffer);
+      },
+      written: () =>
+        stripAnsi(
+          stdoutWrite.mock.calls
+            .map((args: unknown[]) => String(args[0]))
+            .join(""),
+        ),
+      onInterrupt,
+      orchestratorStop,
+      stdoutWrite,
+      renderer,
+      restore: () => {
+        renderer.stop();
+        Object.defineProperty(process.stdin, "isTTY", {
+          configurable: true,
+          value: originalIsTTY,
+        });
+        Object.defineProperty(process.stdin, "setRawMode", {
+          configurable: true,
+          value: originalSetRawMode,
+        });
+        process.stdin.resume = originalResume;
+        process.stdin.pause = originalPause;
+        process.stdin.on = originalOn;
+        process.stdin.removeAllListeners = originalRemoveAllListeners;
+        if (originalRows)
+          Object.defineProperty(process.stdout, "rows", originalRows);
+        if (originalColumns)
+          Object.defineProperty(process.stdout, "columns", originalColumns);
+        stdoutWrite.mockRestore();
+        vi.useRealTimers();
+      },
+    };
+  }
+
+  it("opens the local agent todo/log on ctrl+r and closes it without stopping", () => {
+    const runDir = createRunDir();
+    const session = startInteractiveRenderer({
+      state: {
+        status: "running",
+        gracefulStopRequested: false,
+        interruptHint: "resume",
+        currentIteration: 1,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCacheReadTokens: 0,
+        totalCacheCreationTokens: 0,
+        tokensEstimated: false,
+        commitCount: 0,
+        iterations: [],
+        successCount: 0,
+        failCount: 0,
+        consecutiveFailures: 0,
+        consecutiveErrors: 0,
+        startTime: new Date(0),
+        waitingUntil: null,
+        lastMessage: longMessage,
+      },
+      runDir,
+    });
+
+    try {
+      expect(session.written()).toContain("Line one of the message");
+      expect(session.written()).not.toContain("review me in the morning");
+
+      session.stdoutWrite.mockClear();
+      session.sendKey(18);
+      const opened = session.written();
+      expect(opened).toContain("review me in the morning");
+      expect(opened).toContain("--- iteration-1.jsonl ---");
+      expect(opened).toContain("agent-line-1");
+      expect(opened).not.toContain("Line four should be cut");
+      expect(opened).toContain("ctrl+r or esc to close");
+      expect(session.onInterrupt).not.toHaveBeenCalled();
+      expect(session.orchestratorStop).not.toHaveBeenCalled();
+
+      session.stdoutWrite.mockClear();
+      session.sendKey(27);
+      const closed = session.written();
+      expect(closed).toContain("Line one of the message");
+      expect(closed).not.toContain("review me in the morning");
+      expect(closed).toContain("ctrl+o to expand");
+      expect(session.onInterrupt).not.toHaveBeenCalled();
+    } finally {
+      session.restore();
+      rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it("scrolls the local log with arrow and page keys", () => {
+    const runDir = createRunDir();
+    const session = startInteractiveRenderer({
+      state: {
+        status: "running",
+        gracefulStopRequested: false,
+        interruptHint: "resume",
+        currentIteration: 1,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCacheReadTokens: 0,
+        totalCacheCreationTokens: 0,
+        tokensEstimated: false,
+        commitCount: 0,
+        iterations: [],
+        successCount: 0,
+        failCount: 0,
+        consecutiveFailures: 0,
+        consecutiveErrors: 0,
+        startTime: new Date(0),
+        waitingUntil: null,
+        lastMessage: "live chunk",
+      },
+      runDir,
+    });
+
+    try {
+      session.sendKey(18);
+      session.stdoutWrite.mockClear();
+      session.sendKey(Buffer.from("\x1b[B"));
+      const down = session.written();
+      expect(down).not.toContain("--- notes.md ---");
+      expect(down).toContain("review me in the morning");
+
+      session.stdoutWrite.mockClear();
+      session.sendKey(Buffer.from("\x1b[F"));
+      const jumped = session.written();
+      expect(jumped).toContain("agent-line-40");
+      expect(jumped).not.toContain("review me in the morning");
+      expect(session.onInterrupt).not.toHaveBeenCalled();
+    } finally {
+      session.restore();
+      rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps ctrl+c, ctrl+l, and ctrl+o working around log review", () => {
+    const runDir = createRunDir();
+    const session = startInteractiveRenderer({
+      state: {
+        status: "running",
+        gracefulStopRequested: false,
+        interruptHint: "resume",
+        currentIteration: 1,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCacheReadTokens: 0,
+        totalCacheCreationTokens: 0,
+        tokensEstimated: false,
+        commitCount: 0,
+        iterations: [],
+        successCount: 0,
+        failCount: 0,
+        consecutiveFailures: 0,
+        consecutiveErrors: 0,
+        startTime: new Date(0),
+        waitingUntil: null,
+        lastMessage: longMessage,
+      },
+      runDir,
+    });
+
+    try {
+      session.sendKey(15);
+      expect(session.written()).toContain("Line four should be cut");
+
+      session.stdoutWrite.mockClear();
+      session.sendKey(18);
+      expect(session.written()).toContain("review me in the morning");
+
+      session.stdoutWrite.mockClear();
+      session.sendKey(12);
+      const refreshRaw = session.stdoutWrite.mock.calls
+        .map((args: unknown[]) => String(args[0]))
+        .join("");
+      expect(refreshRaw).toContain("\x1b[2J");
+      expect(stripAnsi(refreshRaw)).toContain("review me in the morning");
+      expect(session.onInterrupt).not.toHaveBeenCalled();
+
+      session.stdoutWrite.mockClear();
+      session.sendKey(18);
+      const foldedLive = session.written();
+      expect(foldedLive).toContain("Line four should be cut");
+      expect(foldedLive).not.toContain("review me in the morning");
+
+      session.sendKey(3);
+      expect(session.onInterrupt).toHaveBeenCalledTimes(1);
+      expect(session.orchestratorStop).not.toHaveBeenCalled();
+    } finally {
+      session.restore();
+      rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it("picks up a growing local log on the next review tick", () => {
+    const runDir = createRunDir();
+    const session = startInteractiveRenderer({
+      state: {
+        status: "aborted",
+        gracefulStopRequested: false,
+        interruptHint: "exit",
+        currentIteration: 2,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCacheReadTokens: 0,
+        totalCacheCreationTokens: 0,
+        tokensEstimated: false,
+        commitCount: 1,
+        iterations: [],
+        successCount: 1,
+        failCount: 0,
+        consecutiveFailures: 0,
+        consecutiveErrors: 0,
+        startTime: new Date(0),
+        waitingUntil: null,
+        lastMessage: "stop condition met",
+      },
+      runDir,
+    });
+
+    try {
+      session.sendKey(18);
+      expect(session.written()).toContain("review me in the morning");
+      expect(session.written()).not.toContain("appended after bedtime");
+
+      appendFileSync(join(runDir, "notes.md"), "appended after bedtime\n");
+      session.stdoutWrite.mockClear();
+      vi.advanceTimersByTime(200);
+      expect(session.written()).toContain("appended after bedtime");
+      expect(session.onInterrupt).not.toHaveBeenCalled();
+    } finally {
+      session.restore();
+      rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it("reviews the local log on a finished run without a shell", () => {
+    const runDir = createRunDir();
+    const session = startInteractiveRenderer({
+      state: {
+        status: "aborted",
+        gracefulStopRequested: false,
+        interruptHint: "exit",
+        currentIteration: 2,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCacheReadTokens: 0,
+        totalCacheCreationTokens: 0,
+        tokensEstimated: false,
+        commitCount: 1,
+        iterations: [],
+        successCount: 1,
+        failCount: 0,
+        consecutiveFailures: 0,
+        consecutiveErrors: 0,
+        startTime: new Date(0),
+        waitingUntil: null,
+        lastMessage: "stop condition met",
+      },
+      runDir,
+    });
+
+    try {
+      expect(session.written()).toContain("ctrl+c to exit");
+      session.stdoutWrite.mockClear();
+      session.sendKey(18);
+      const reviewed = session.written();
+      expect(reviewed).toContain("review me in the morning");
+      expect(reviewed).toContain("ctrl+c to exit");
+      expect(session.onInterrupt).not.toHaveBeenCalled();
+    } finally {
+      session.restore();
+      rmSync(runDir, { recursive: true, force: true });
     }
   });
 });
