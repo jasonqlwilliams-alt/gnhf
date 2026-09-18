@@ -15,9 +15,10 @@ import type { Orchestrator, OrchestratorState } from "./core/orchestrator.js";
 import {
   clampLogReviewOffset,
   formatRunLogReviewLines,
-  loadRunLogReviewSections,
+  refreshRunLogReview,
   visibleLogReviewLines,
   type LogReviewSection,
+  type RunLogReviewCache,
 } from "./core/log-review.js";
 import {
   type Cell,
@@ -70,6 +71,8 @@ export interface RendererOptions {
 export interface LogReviewView {
   sections: LogReviewSection[];
   offset: number;
+  lines?: string[];
+  wrapWidth?: number;
 }
 
 // ── ANSI helpers ─────────────────────────────────────────────
@@ -575,7 +578,10 @@ function renderLogReviewCells(
   height: number,
 ): Cell[][] {
   if (height <= 0) return [];
-  const lines = formatRunLogReviewLines(review.sections, width);
+  const lines =
+    review.lines !== undefined && review.wrapWidth === width
+      ? review.lines
+      : formatRunLogReviewLines(review.sections, width);
   return visibleLogReviewLines(lines, review.offset, height).map((line) =>
     line ? textToCells(line, "dim") : [],
   );
@@ -925,6 +931,7 @@ export class Renderer {
   private needsFullRedraw = false;
   private messageUnfolded = false;
   private logReview: LogReviewView | null = null;
+  private logReviewCache: RunLogReviewCache | null = null;
   private runDir: string | undefined;
   private seedTop: number;
   private seedBottom: number;
@@ -995,9 +1002,7 @@ export class Renderer {
         if (data[0] === ESC) {
           if (this.logReview) {
             if (data.length === 1) {
-              this.logReview = null;
-              this.needsFullRedraw = true;
-              this.render();
+              this.closeLogReview();
               return;
             }
             this.handleLogReviewScroll(data);
@@ -1167,39 +1172,56 @@ export class Renderer {
     if (!this.logReview || this.runDir === undefined) {
       return this.logReview;
     }
-    const offset = this.logReview.offset;
-    this.logReview = {
-      sections: loadRunLogReviewSections(this.runDir),
-      offset,
-    };
+    this.logReview = this.refreshOpenLogReview(this.logReview.offset);
     return this.logReview;
+  }
+
+  private closeLogReview(): void {
+    this.logReview = null;
+    this.logReviewCache = null;
+    this.needsFullRedraw = true;
+    this.render();
+  }
+
+  private refreshOpenLogReview(offset: number): LogReviewView {
+    const wrapWidth = this.reviewWrapWidth();
+    this.logReviewCache = refreshRunLogReview(
+      this.runDir as string,
+      wrapWidth,
+      this.logReviewCache,
+    );
+    return {
+      sections: this.logReviewCache.sections,
+      lines: this.logReviewCache.lines,
+      wrapWidth,
+      offset: clampLogReviewOffset(
+        offset,
+        this.logReviewCache.lines.length,
+        this.reviewPageSize(),
+      ),
+    };
   }
 
   private toggleLogReview(): void {
     if (this.logReview) {
-      this.logReview = null;
-      this.needsFullRedraw = true;
-      this.render();
+      this.closeLogReview();
       return;
     }
     if (this.runDir === undefined) return;
-    this.logReview = {
-      sections: loadRunLogReviewSections(this.runDir),
-      offset: 0,
-    };
+    this.logReview = this.refreshOpenLogReview(0);
     this.needsFullRedraw = true;
     this.render();
   }
 
   private handleLogReviewScroll(data: Buffer): void {
-    if (!this.logReview) return;
+    if (!this.logReview || this.runDir === undefined) return;
     const action = reviewScrollAction(data);
     if (action === null) return;
 
-    const wrapWidth = this.reviewWrapWidth();
     const pageSize = this.reviewPageSize();
-    const lines = formatRunLogReviewLines(this.logReview.sections, wrapWidth);
-    let offset = this.logReview.offset;
+    const view = this.refreshOpenLogReview(this.logReview.offset);
+    const lines = view.lines ?? [];
+    let offset = view.offset;
     if (action === "up") offset -= 1;
     else if (action === "down") offset += 1;
     else if (action === "pageup") offset -= Math.max(1, pageSize - 1);
@@ -1207,7 +1229,7 @@ export class Renderer {
     else if (action === "home") offset = 0;
     else offset = lines.length;
     this.logReview = {
-      ...this.logReview,
+      ...view,
       offset: clampLogReviewOffset(offset, lines.length, pageSize),
     };
     this.needsFullRedraw = true;

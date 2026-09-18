@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect, vi } from "vitest";
@@ -2020,6 +2020,48 @@ describe("Renderer ctrl+r log review", () => {
       session.sendKey(3);
       expect(session.onInterrupt).toHaveBeenCalledTimes(1);
       expect(session.orchestratorStop).not.toHaveBeenCalled();
+    } finally {
+      session.restore();
+      rmSync(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it("picks up a growing local log on the next review tick", () => {
+    const runDir = createRunDir();
+    const session = startInteractiveRenderer({
+      state: {
+        status: "aborted",
+        gracefulStopRequested: false,
+        interruptHint: "exit",
+        currentIteration: 2,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCacheReadTokens: 0,
+        totalCacheCreationTokens: 0,
+        tokensEstimated: false,
+        commitCount: 1,
+        iterations: [],
+        successCount: 1,
+        failCount: 0,
+        consecutiveFailures: 0,
+        consecutiveErrors: 0,
+        startTime: new Date(0),
+        waitingUntil: null,
+        lastMessage: "stop condition met",
+      },
+      runDir,
+    });
+
+    try {
+      session.sendKey(18);
+      expect(session.written()).toContain("review me in the morning");
+      expect(session.written()).not.toContain("appended after bedtime");
+
+      appendFileSync(join(runDir, "notes.md"), "appended after bedtime\n");
+      session.stdoutWrite.mockClear();
+      vi.advanceTimersByTime(200);
+      expect(session.written()).toContain("appended after bedtime");
+      expect(session.onInterrupt).not.toHaveBeenCalled();
     } finally {
       session.restore();
       rmSync(runDir, { recursive: true, force: true });

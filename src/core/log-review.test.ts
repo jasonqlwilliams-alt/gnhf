@@ -7,6 +7,7 @@ import {
   formatRunLogReviewLines,
   listRunLogReviewFiles,
   loadRunLogReviewSections,
+  refreshRunLogReview,
   visibleLogReviewLines,
 } from "./log-review.js";
 
@@ -145,6 +146,62 @@ describe("formatRunLogReviewLines", () => {
 
     expect(lines.join("\n")).toContain("red text");
     expect(lines.join("\n")).not.toContain("\x1b[");
+  });
+});
+
+describe("refreshRunLogReview", () => {
+  let runDir: string | undefined;
+
+  afterEach(() => {
+    if (runDir) rmSync(runDir, { recursive: true, force: true });
+    runDir = undefined;
+  });
+
+  it("reuses loaded sections and wrapped lines when files and width are unchanged", () => {
+    runDir = mkdtempSync(join(tmpdir(), "gnhf-log-review-"));
+    writeFileSync(join(runDir, "notes.md"), "alpha beta gamma delta\n");
+    writeFileSync(join(runDir, "gnhf.log"), '{"event":"end"}\n');
+
+    const first = refreshRunLogReview(runDir, 40, null);
+    const second = refreshRunLogReview(runDir, 40, first);
+
+    expect(second).toBe(first);
+    expect(second.lines.join("\n")).toContain("alpha beta");
+    expect(second.lines.join("\n")).toContain("event");
+  });
+
+  it("reloads a file after its size changes and keeps other sections", () => {
+    runDir = mkdtempSync(join(tmpdir(), "gnhf-log-review-"));
+    writeFileSync(join(runDir, "notes.md"), "morning todo\n");
+    writeFileSync(join(runDir, "gnhf.log"), '{"event":"start"}\n');
+
+    const first = refreshRunLogReview(runDir, 40, null);
+    writeFileSync(join(runDir, "notes.md"), "morning todo\nappended later\n");
+    const second = refreshRunLogReview(runDir, 40, first);
+
+    expect(second.sections).not.toBe(first.sections);
+    expect(second.lines).not.toBe(first.lines);
+    expect(second.lines.join("\n")).toContain("appended later");
+    expect(
+      second.sections.find((section) => section.name === "gnhf.log"),
+    ).toBe(first.sections.find((section) => section.name === "gnhf.log"));
+  });
+
+  it("rewraps cached sections when only the wrap width changes", () => {
+    runDir = mkdtempSync(join(tmpdir(), "gnhf-log-review-"));
+    writeFileSync(join(runDir, "notes.md"), "alpha beta gamma delta\n");
+
+    const first = refreshRunLogReview(runDir, 40, null);
+    const second = refreshRunLogReview(runDir, 8, first);
+
+    expect(second.sections).toBe(first.sections);
+    expect(second.lines).not.toBe(first.lines);
+    expect(second.wrapWidth).toBe(8);
+    expect(
+      second.lines.every(
+        (line) => line.startsWith("--- ") || line.length <= 8,
+      ),
+    ).toBe(true);
   });
 });
 

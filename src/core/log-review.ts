@@ -25,6 +25,24 @@ export interface LoadRunLogReviewOptions {
   maxCharsPerFile?: number;
 }
 
+interface CachedReviewFile {
+  mtimeMs: number;
+  size: number;
+  section: LogReviewSection | null;
+  wrapWidth: number;
+  lines: string[] | null;
+}
+
+export interface RunLogReviewCache {
+  runDir: string;
+  maxCharsPerFile: number;
+  names: string[];
+  files: Map<string, CachedReviewFile>;
+  sections: LogReviewSection[];
+  wrapWidth: number;
+  lines: string[];
+}
+
 export function listRunLogReviewFiles(runDir: string): string[] {
   if (!existsSync(runDir)) return [];
 
@@ -71,26 +89,110 @@ export function formatRunLogReviewLines(
   wrapWidth: number,
 ): string[] {
   if (sections.length === 0) {
-    return ["no local notes or agent logs yet"];
+    return emptyReviewLines();
   }
 
   const width = Math.max(1, wrapWidth);
-  const lines: string[] = [];
-  for (const section of sections) {
-    const header =
-      section.truncated === true
-        ? `--- ${section.name} (truncated) ---`
-        : `--- ${section.name} ---`;
-    lines.push(header);
-    const body = stripReviewText(section.body);
-    const wrapped = wordWrap(body, width);
-    if (wrapped.length === 0) {
-      lines.push("");
-    } else {
-      lines.push(...wrapped);
+  return sections.flatMap((section) => sectionLines(section, width));
+}
+
+export function refreshRunLogReview(
+  runDir: string,
+  wrapWidth: number,
+  cache: RunLogReviewCache | null,
+  options: LoadRunLogReviewOptions = {},
+): RunLogReviewCache {
+  const maxCharsPerFile =
+    options.maxCharsPerFile ?? DEFAULT_LOG_REVIEW_MAX_CHARS;
+  const width = Math.max(1, wrapWidth);
+  const names = listRunLogReviewFiles(runDir);
+  const previous =
+    cache !== null &&
+    cache.runDir === runDir &&
+    cache.maxCharsPerFile === maxCharsPerFile
+      ? cache
+      : null;
+
+  const files = new Map<string, CachedReviewFile>();
+  let contentChanged =
+    previous === null || !sameStringList(previous.names, names);
+
+  for (const name of names) {
+    const path = join(runDir, name);
+    let mtimeMs = -1;
+    let size = -1;
+    try {
+      const st = statSync(path);
+      mtimeMs = st.mtimeMs;
+      size = st.size;
+    } catch {
+      contentChanged = true;
+      files.set(name, {
+        mtimeMs,
+        size,
+        section: null,
+        wrapWidth: width,
+        lines: null,
+      });
+      continue;
     }
+
+    const prev = previous?.files.get(name);
+    if (
+      prev &&
+      prev.mtimeMs === mtimeMs &&
+      prev.size === size &&
+      prev.section !== null
+    ) {
+      if (prev.wrapWidth === width && prev.lines !== null) {
+        files.set(name, prev);
+      } else {
+        files.set(name, {
+          ...prev,
+          wrapWidth: width,
+          lines: sectionLines(prev.section, width),
+        });
+      }
+      continue;
+    }
+
+    contentChanged = true;
+    const loaded = readReviewFile(path, maxCharsPerFile);
+    const section = loaded === null ? null : { name, ...loaded };
+    files.set(name, {
+      mtimeMs,
+      size,
+      section,
+      wrapWidth: width,
+      lines: section === null ? null : sectionLines(section, width),
+    });
   }
-  return lines;
+
+  const wrapChanged = previous === null || previous.wrapWidth !== width;
+  if (previous !== null && !contentChanged && !wrapChanged) {
+    return previous;
+  }
+
+  const sections =
+    previous !== null && !contentChanged
+      ? previous.sections
+      : names
+          .map((name) => files.get(name)?.section)
+          .filter((section): section is LogReviewSection => section !== null);
+  const lines =
+    sections.length === 0
+      ? emptyReviewLines()
+      : names.flatMap((name) => files.get(name)?.lines ?? []);
+
+  return {
+    runDir,
+    maxCharsPerFile,
+    names,
+    files,
+    sections,
+    wrapWidth: width,
+    lines,
+  };
 }
 
 export function clampLogReviewOffset(
@@ -112,6 +214,27 @@ export function visibleLogReviewLines(
   const height = Math.max(0, viewHeight);
   const start = clampLogReviewOffset(offset, lines.length, Math.max(1, height));
   return lines.slice(start, start + height);
+}
+
+function emptyReviewLines(): string[] {
+  return ["no local notes or agent logs yet"];
+}
+
+function sectionLines(section: LogReviewSection, width: number): string[] {
+  const header =
+    section.truncated === true
+      ? `--- ${section.name} (truncated) ---`
+      : `--- ${section.name} ---`;
+  const wrapped = wordWrap(stripReviewText(section.body), width);
+  return [header, ...(wrapped.length === 0 ? [""] : wrapped)];
+}
+
+function sameStringList(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
 
 function stripReviewText(s: string): string {
