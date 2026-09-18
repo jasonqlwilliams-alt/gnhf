@@ -103,6 +103,7 @@ describe("ClaudeAgent", () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
     const configuredAgent = new ClaudeAgent({
+      platform: "darwin",
       schema: STOP_SCHEMA,
     });
 
@@ -260,6 +261,7 @@ describe("ClaudeAgent", () => {
     mockSpawn.mockReturnValue(proc);
     const configuredAgent = new ClaudeAgent({
       extraArgs: ["--model", "sonnet"],
+      platform: "darwin",
     });
 
     configuredAgent.run("test prompt", "/work/dir", { model: "haiku" });
@@ -285,7 +287,10 @@ describe("ClaudeAgent", () => {
   it("uses the configured model as the default and lets a per-run override win", () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
-    const configuredAgent = new ClaudeAgent({ model: "sonnet" });
+    const configuredAgent = new ClaudeAgent({
+      model: "sonnet",
+      platform: "darwin",
+    });
 
     configuredAgent.run("test prompt", "/work/dir");
 
