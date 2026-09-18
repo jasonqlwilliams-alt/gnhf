@@ -205,7 +205,9 @@ export function renderAgentMessageCells(
   lastAgentError?: string | null,
 ): Cell[][] {
   const displayMessage = message === null ? null : stripAnsi(message);
-  const displayError = lastAgentError ? stripAnsi(lastAgentError) : lastAgentError;
+  const displayError = lastAgentError
+    ? stripAnsi(lastAgentError)
+    : lastAgentError;
   const lines: string[] = [];
   if (status === "waiting") {
     lines.push("waiting (backoff)...");
