@@ -182,9 +182,9 @@ describe("refreshRunLogReview", () => {
     expect(second.sections).not.toBe(first.sections);
     expect(second.lines).not.toBe(first.lines);
     expect(second.lines.join("\n")).toContain("appended later");
-    expect(
-      second.sections.find((section) => section.name === "gnhf.log"),
-    ).toBe(first.sections.find((section) => section.name === "gnhf.log"));
+    expect(second.sections.find((section) => section.name === "gnhf.log")).toBe(
+      first.sections.find((section) => section.name === "gnhf.log"),
+    );
   });
 
   it("rewraps cached sections when only the wrap width changes", () => {
@@ -198,9 +198,7 @@ describe("refreshRunLogReview", () => {
     expect(second.lines).not.toBe(first.lines);
     expect(second.wrapWidth).toBe(8);
     expect(
-      second.lines.every(
-        (line) => line.startsWith("--- ") || line.length <= 8,
-      ),
+      second.lines.every((line) => line.startsWith("--- ") || line.length <= 8),
     ).toBe(true);
   });
 });
