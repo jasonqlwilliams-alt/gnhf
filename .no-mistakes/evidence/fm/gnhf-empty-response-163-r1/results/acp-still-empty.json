@@ -1,0 +1,68 @@
+{
+  "name": "acp-still-empty",
+  "cwd": "/tmp/gnhf-live-empty-ROu9A9",
+  "debugLogPath": "/tmp/gnhf-live-empty-ROu9A9/.gnhf/runs/acp-empty-twice-shou-bf3a37/gnhf.log",
+  "mockLogPath": "/home/jason/.no-mistakes/evidence/01M2V43NQ8J8RQW7Q2K1CN5GJR/results/acp-still-empty-mock.jsonl",
+  "code": 0,
+  "stdout": "\u001b[?1049h\u001b[?25l\u001b[H                                                                                \n  \u001b[1m·\u001b[0m              \u001b[2mg n h f\u001b[0m  \u001b[2m·\u001b[0m  \u001b[2ma c p\u001b[0m  \u001b[2m·\u001b[0m  \u001b[2me m p t y - t a r g e t\u001b[0m                  \n                                                                            \u001b[1m⋆\u001b[0m  \u001b[1m°\u001b[0m\n                                                                                \n            \u001b[1m┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻\u001b[0m             \n            \u001b[1m┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫\u001b[0m             \n            \u001b[1m┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹\u001b[0m             \n                                                                                \n                        \u001b[2macp empty twice should fail once\u001b[0m                        \n                                                                          \u001b[1m⋆\u001b[0m     \n \u001b[2m✧\u001b[0m                                                                              \n                                                                                \n                                                                                \n                 \u001b[1m00:00:00\u001b[0m \u001b[2m·\u001b[0m 0 total \u001b[2m·\u001b[0m 0 in \u001b[2m·\u001b[0m 0 out \u001b[2m·\u001b[0m 0 commits                  \n                                                                                \n                                                                                \n                                   \u001b[2mworking...\u001b[0m                                   \n                                                                                \n                                                                                \n                                                                                \n                                                                                \n                                       🌕                                       \n                     \u001b[2m[ctrl+c to stop, gnhf again to resume]\u001b[0m                     \n                                                                                \u001b[14;15H\u001b[0m\u001b[1m00:\u001b[14;23H\u001b[0m \u001b[0m\u001b[2m·\u001b[0m ~72\u001b[14;39H~720\u001b[14;44Hin \u001b[0m\u001b[2m·\u001b[0m ~0\u001b[14;52Hout\u001b[14;56H\u001b[0m\u001b[2m·\u001b[0m 0 commits\u001b[22;40H🌖\u001b[22;40H\u001b[0m🌗\u001b[22;40H\u001b[0m🌘\u001b[22;40H\u001b[0m🌑\u001b[22;40H\u001b[0m🌒\u001b[14;22H\u001b[0m\u001b[1m1\u001b[22;40H\u001b[0m🌓\u001b[11;2H\u001b[0m\u001b[1m✧\u001b[22;40H\u001b[0m🌔\u001b[22;40H\u001b[0m🌕\u001b[11;2H\u001b[0m\u001b[2m✧\u001b[22;40H\u001b[0m🌖\u001b[22;40H\u001b[0m🌗\u001b[14;22H\u001b[0m\u001b[1m2\u001b[22;40H\u001b[0m🌘\u001b[?25h\u001b[?1049l\n╭─────────────────────────────────────────────────────────────────────────╮\n│ × gnhf stopped                                                          │\n│   acp:empty-target ran for 2s before: ACP agent returned no output text │\n╰─────────────────────────────────────────────────────────────────────────╯\n\n  iterations      1 total       0 good       1 failed\n  tokens          ~720 total    ~720 in      ~0 out\n  branch diff     0 commits     +0           -0\n  files           0 added       0 updated    0 deleted\n\n  notes           /tmp/gnhf-live-empty-ROu9A9/.gnhf/runs/acp-empty-twice-shou-bf3a37/notes.md\n  debug log       /tmp/gnhf-live-empty-ROu9A9/.gnhf/runs/acp-empty-twice-shou-bf3a37/gnhf.log\n\n  next steps      git log --oneline 6d3139d509c0..HEAD\n                  git diff --stat 6d3139d509c0..HEAD\n                  gh pr create\n\n  too much        git push no-mistakes:\n  to review?      https://github.com/kunchenguid/no-mistakes\n",
+  "stderr": "\n  gnhf: Run log: /tmp/gnhf-live-empty-ROu9A9/.gnhf/runs/acp-empty-twice-shou-bf3a37/gnhf.log\n\n",
+  "commitCount": "1",
+  "continuation": {
+    "timestamp": "2026-09-18T20:54:19.814Z",
+    "pid": 2630552,
+    "event": "acp:output:continuation",
+    "target": "empty-target",
+    "sessionKey": "acp-empty-twice-shou-bf3a37",
+    "attempt": 1
+  },
+  "agentError": {
+    "timestamp": "2026-09-18T20:54:20.830Z",
+    "pid": 2630552,
+    "event": "agent:run:error",
+    "iteration": 1,
+    "elapsedMs": 2231,
+    "error": {
+      "name": "EmptyAgentResponseError",
+      "message": "ACP agent returned no output text",
+      "stack": "EmptyAgentResponseError: ACP agent returned no output text\n    at runTurn (file:///home/jason/.no-mistakes/worktrees/81d474556c1c/01M2V43NQ8J8RQW7Q2K1CN5GJR/dist/cli.mjs:14107:72)\n    at async recoverEmptyResponseOnce (file:///home/jason/.no-mistakes/worktrees/81d474556c1c/01M2V43NQ8J8RQW7Q2K1CN5GJR/dist/cli.mjs:13877:23)\n    at async AcpAgent.run (file:///home/jason/.no-mistakes/worktrees/81d474556c1c/01M2V43NQ8J8RQW7Q2K1CN5GJR/dist/cli.mjs:14129:12)\n    at async Orchestrator.runIteration (file:///home/jason/.no-mistakes/worktrees/81d474556c1c/01M2V43NQ8J8RQW7Q2K1CN5GJR/dist/cli.mjs:17836:19)\n    at async Orchestrator.start (file:///home/jason/.no-mistakes/worktrees/81d474556c1c/01M2V43NQ8J8RQW7Q2K1CN5GJR/dist/cli.mjs:17643:20)"
+    }
+  },
+  "prompts": [
+    {
+      "timestamp": "2026-09-18T20:54:18.800Z",
+      "pid": 2630928,
+      "event": "agent:prompt:start",
+      "sessionId": "session-1",
+      "promptCount": 1,
+      "isContinuation": false,
+      "mode": "always-empty"
+    },
+    {
+      "timestamp": "2026-09-18T20:54:19.816Z",
+      "pid": 2630928,
+      "event": "agent:prompt:start",
+      "sessionId": "session-1",
+      "promptCount": 2,
+      "isContinuation": true,
+      "mode": "always-empty"
+    }
+  ],
+  "debugEvents": [
+    "run:start",
+    "orchestrator:start",
+    "iteration:start",
+    "agent:run:start",
+    "acp:runtime:created",
+    "acp:turn:start",
+    "acp:turn:result",
+    "acp:output:continuation",
+    "acp:turn:start",
+    "acp:turn:result",
+    "agent:run:error",
+    "iteration:end",
+    "orchestrator:abort",
+    "acp:close",
+    "orchestrator:end",
+    "run:complete"
+  ]
+}

@@ -1,0 +1,7 @@
+{"timestamp":"2026-09-18T20:54:18.753Z","pid":2630928,"event":"process:ready","mode":"always-empty"}
+{"timestamp":"2026-09-18T20:54:18.761Z","pid":2630928,"event":"agent:initialize"}
+{"timestamp":"2026-09-18T20:54:18.771Z","pid":2630928,"event":"agent:newSession","sessionId":"session-1","cwd":"/tmp/gnhf-live-empty-ROu9A9"}
+{"timestamp":"2026-09-18T20:54:18.800Z","pid":2630928,"event":"agent:prompt:start","sessionId":"session-1","promptCount":1,"isContinuation":false,"mode":"always-empty"}
+{"timestamp":"2026-09-18T20:54:18.800Z","pid":2630928,"event":"agent:prompt:empty","sessionId":"session-1","promptCount":1,"workspaceChanged":true}
+{"timestamp":"2026-09-18T20:54:19.816Z","pid":2630928,"event":"agent:prompt:start","sessionId":"session-1","promptCount":2,"isContinuation":true,"mode":"always-empty"}
+{"timestamp":"2026-09-18T20:54:19.816Z","pid":2630928,"event":"agent:prompt:empty","sessionId":"session-1","promptCount":2,"workspaceChanged":true}

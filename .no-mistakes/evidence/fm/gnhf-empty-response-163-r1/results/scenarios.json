@@ -1,0 +1,60 @@
+{
+  "scenarios": [
+    {
+      "name": "CLI help does not expose a flag to keep failed-iteration work instead of rolling it back",
+      "result": "pass",
+      "live": true,
+      "evidence": "/home/jason/.no-mistakes/evidence/01M2V43NQ8J8RQW7Q2K1CN5GJR/results/cli-help-no-keep-failed-work.json",
+      "reason": "No keep-failed-work flag is advertised on the live CLI help surface"
+    },
+    {
+      "name": "OpenCode empty first turn recovers via one same-session continuation and commits",
+      "result": "pass",
+      "live": true,
+      "evidence": "/home/jason/.no-mistakes/evidence/01M2V43NQ8J8RQW7Q2K1CN5GJR/results/opencode-empty-then-recover.json",
+      "reason": "CLI recovered after one continuation and committed the iteration"
+    },
+    {
+      "name": "OpenCode still-empty continuation records one failure and rolls back the work",
+      "result": "pass",
+      "live": true,
+      "evidence": "/home/jason/.no-mistakes/evidence/01M2V43NQ8J8RQW7Q2K1CN5GJR/results/opencode-still-empty.json",
+      "reason": "Exactly one continuation, original empty-response failure, work rolled back"
+    },
+    {
+      "name": "OpenCode provider stream error is not recovered as an empty answer",
+      "result": "pass",
+      "live": true,
+      "evidence": "/home/jason/.no-mistakes/evidence/01M2V43NQ8J8RQW7Q2K1CN5GJR/results/opencode-provider-error.json",
+      "reason": "Provider error failed immediately with no continuation"
+    },
+    {
+      "name": "Interrupt during the empty-answer continuation aborts instead of recording a failure",
+      "result": "pass",
+      "live": true,
+      "evidence": "/home/jason/.no-mistakes/evidence/01M2V43NQ8J8RQW7Q2K1CN5GJR/results/opencode-interrupt-continuation.json",
+      "reason": "Force-stop aborted the hung continuation without an empty-response failure"
+    },
+    {
+      "name": "Copilot empty turn stays on the existing failure path with no continuation",
+      "result": "pass",
+      "live": true,
+      "evidence": "/home/jason/.no-mistakes/evidence/01M2V43NQ8J8RQW7Q2K1CN5GJR/results/copilot-no-continuation.json",
+      "reason": "Copilot spawned once and failed immediately without a continuation"
+    },
+    {
+      "name": "ACP empty first turn recovers via one same-session continuation and commits",
+      "result": "pass",
+      "live": true,
+      "evidence": "/home/jason/.no-mistakes/evidence/01M2V43NQ8J8RQW7Q2K1CN5GJR/results/acp-empty-then-recover.json",
+      "reason": "ACP recovered after one continuation and committed the iteration"
+    },
+    {
+      "name": "ACP still-empty continuation records the original failure after one retry",
+      "result": "pass",
+      "live": true,
+      "evidence": "/home/jason/.no-mistakes/evidence/01M2V43NQ8J8RQW7Q2K1CN5GJR/results/acp-still-empty.json",
+      "reason": "Exactly one ACP continuation then the original empty-output failure"
+    }
+  ]
+}
