@@ -1,0 +1,13 @@
+{"timestamp":"2026-09-18T21:43:20.553Z","pid":2485438,"event":"run:start","args":["recover empty copilot final","--agent","copilot","--max-iterations","1","--current-branch","--prevent-sleep","off"],"runId":"recover-empty-copilo-33c829","runDir":"/tmp/gnhf-copilot-live-repo-NY4Wic/.gnhf/runs/recover-empty-copilo-33c829","agent":"copilot","promptLength":27,"promptFromStdin":false,"startIteration":0,"maxIterations":1,"preventSleep":false,"worktree":false,"worktreePath":null,"currentBranch":true,"push":false,"platform":"linux","nodeVersion":"v22.23.2","gnhfVersion":"0.1.49"}
+{"timestamp":"2026-09-18T21:43:20.568Z","pid":2485438,"event":"orchestrator:start","agent":"copilot","runId":"recover-empty-copilo-33c829","startIteration":0,"maxIterations":1,"maxRateLimitWaitMs":86400000,"push":false,"maxConsecutiveFailures":1,"baseCommit":"be3754c02ad55f7964c82cd3ce14258344177066","initialCommitCount":0}
+{"timestamp":"2026-09-18T21:43:20.578Z","pid":2485438,"event":"iteration:start","iteration":1,"promptLength":2132,"consecutiveFailures":0,"totalInputTokens":0,"totalOutputTokens":0,"git":{"head":"be3754c02ad55f7964c82cd3ce14258344177066","branch":"main","commitCount":0}}
+{"timestamp":"2026-09-18T21:43:20.579Z","pid":2485438,"event":"agent:run:start","iteration":1,"agent":"copilot","logPath":"/tmp/gnhf-copilot-live-repo-NY4Wic/.gnhf/runs/recover-empty-copilo-33c829/iteration-1.jsonl"}
+{"timestamp":"2026-09-18T21:43:20.652Z","pid":2485438,"event":"copilot:output:continuation","sessionId":"0cb916db-26aa-40f2-86b5-1ba81b225fd2","attempt":1}
+{"timestamp":"2026-09-18T21:43:21.046Z","pid":2485438,"event":"orchestrator:graceful-stop-requested","iteration":1,"hasActiveIteration":true,"status":"running"}
+{"timestamp":"2026-09-18T21:43:21.046Z","pid":2485438,"event":"signal:SIGINT"}
+{"timestamp":"2026-09-18T21:43:21.146Z","pid":2485438,"event":"orchestrator:stop-requested","iteration":1,"hasActiveIteration":true,"loopDone":false}
+{"timestamp":"2026-09-18T21:43:21.147Z","pid":2485438,"event":"signal:SIGINT"}
+{"timestamp":"2026-09-18T21:43:21.147Z","pid":2485438,"event":"agent:run:stopped","iteration":1,"elapsedMs":568}
+{"timestamp":"2026-09-18T21:43:21.147Z","pid":2485438,"event":"iteration:stopped","iteration":1,"elapsedMs":569}
+{"timestamp":"2026-09-18T21:43:21.154Z","pid":2485438,"event":"orchestrator:end","status":"stopped","iterations":1,"successCount":0,"failCount":0,"totalInputTokens":0,"totalOutputTokens":1,"commitCount":0}
+{"timestamp":"2026-09-18T21:43:21.175Z","pid":2485438,"event":"run:complete","signal":"SIGINT","status":"stopped","iterations":1,"successCount":0,"failCount":0,"totalInputTokens":0,"totalOutputTokens":1,"totalCacheReadTokens":0,"totalCacheCreationTokens":0,"totalTokens":1,"commitCount":0,"worktreePath":null}

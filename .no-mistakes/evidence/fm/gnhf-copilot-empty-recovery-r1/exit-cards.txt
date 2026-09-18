@@ -1,0 +1,37 @@
+=== recover (empty final -> --session-id retry succeeded) ===
+x gnhf stopped
+  copilot ran for 0s before: max iterations reached (1)
+
+  iterations      1 total       1 good       0 failed
+  tokens          11 total      3 in         8 out
+  branch diff     1 commit      +1           -0
+  files           1 added       0 updated    0 deleted
+
+notes.md: recovered empty Copilot final via --session-id
+gnhf.log: copilot:output:continuation sessionId=0cb916db-26aa-40f2-86b5-1ba81b225fd2
+          agent:run:end success=true
+
+=== still-empty (retry still empty -> original failure kept) ===
+x gnhf stopped
+  copilot ran for 0s before: copilot returned no agent message
+
+  iterations      1 total       0 good       1 failed
+  branch diff     0 commits
+
+notes.md: [ERROR] copilot returned no agent message
+gnhf.log: copilot:output:continuation then agent:run:error
+
+=== no-session (empty turn, no session.start id -> no second spawn) ===
+notes.md: [ERROR] copilot returned no agent message
+mock: 1 spawn, no --session-id / --continue / --resume
+gnhf.log: no copilot:output:continuation
+
+=== provider-error (login required with session id -> not recovered) ===
+notes.md: [ERROR] copilot exited with code 1: login required
+mock: 1 spawn
+gnhf.log: agent:run:error, no copilot:output:continuation
+
+=== interrupt (SIGINT during --session-id continuation) ===
+exit 130
+notes.md: no iteration failure recorded
+gnhf.log: copilot:output:continuation, signal:SIGINT, orchestrator:stop-requested, agent:run:stopped

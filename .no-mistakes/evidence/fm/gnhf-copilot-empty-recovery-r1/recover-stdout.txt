@@ -1,0 +1,43 @@
+[?1049h[?25l[H                                                                                
+                           g n h f  ·  c o p i l o t                       ° ⋆  
+                                                                                
+                                                                                
+            ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻             
+            ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫             
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹             
+                                                                                
+                          recover empty copilot final                           
+                                                                             ·  
+                                                                                
+·                                                                               
+                                                                                
+                 00:00:00 · 0 total · 0 in · 0 out · 0 commits                  
+                                                                                
+      ⋆                                                                         
+                                   working...                                   
+                                                                           ⋆    
+    ⋆                                                                           
+                                                                                
+                                                                                
+                                       🌓                                       
+                     [ctrl+c to stop, gnhf again to resume]                     
+                                                                                [?25h[?1049l
+╭────────────────────────────────────────────────────────────╮
+│ × gnhf stopped                                             │
+│   copilot ran for 0s before: max iterations reached (1)    │
+╰────────────────────────────────────────────────────────────╯
+
+  iterations      1 total       1 good       0 failed
+  tokens          11 total      3 in         8 out
+  branch diff     1 commit      +1           -0
+  files           1 added       0 updated    0 deleted
+
+  notes           /tmp/gnhf-copilot-live-repo-P0iCad/.gnhf/runs/recover-empty-copilo-33c829/notes.md
+  debug log       /tmp/gnhf-copilot-live-repo-P0iCad/.gnhf/runs/recover-empty-copilo-33c829/gnhf.log
+
+  next steps      git log --oneline 2e09761efa87..HEAD
+                  git diff --stat 2e09761efa87..HEAD
+                  gh pr create
+
+  too much        git push no-mistakes:
+  to review?      https://github.com/kunchenguid/no-mistakes

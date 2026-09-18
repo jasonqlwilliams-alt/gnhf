@@ -1,0 +1,172 @@
+{
+  "product": "node dist/cli.mjs --agent copilot --max-iterations 1 --current-branch --prevent-sleep off",
+  "copilot": "protocol-faithful stand-in at agentPathOverride.copilot (real Copilot empty-final is not deterministic)",
+  "scenarios": {
+    "recover": {
+      "events": [
+        "spawn",
+        "spawn"
+      ],
+      "spawns": [
+        {
+          "argv": [
+            "-p",
+            "<iteration prompt>",
+            "--output-format",
+            "json",
+            "--stream",
+            "off",
+            "--no-color",
+            "--allow-all"
+          ],
+          "sessionId": null,
+          "hasContinuationPrompt": false,
+          "forbidden": []
+        },
+        {
+          "argv": [
+            "--session-id",
+            "0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+            "-p",
+            "<continuation prompt>",
+            "--output-format",
+            "json",
+            "--stream",
+            "off",
+            "--no-color",
+            "--allow-all"
+          ],
+          "sessionId": "0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+          "hasContinuationPrompt": true,
+          "forbidden": []
+        }
+      ]
+    },
+    "still-empty": {
+      "events": [
+        "spawn",
+        "spawn"
+      ],
+      "spawns": [
+        {
+          "argv": [
+            "-p",
+            "<iteration prompt>",
+            "--output-format",
+            "json",
+            "--stream",
+            "off",
+            "--no-color",
+            "--allow-all"
+          ],
+          "sessionId": null,
+          "hasContinuationPrompt": false,
+          "forbidden": []
+        },
+        {
+          "argv": [
+            "--session-id",
+            "0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+            "-p",
+            "<continuation prompt>",
+            "--output-format",
+            "json",
+            "--stream",
+            "off",
+            "--no-color",
+            "--allow-all"
+          ],
+          "sessionId": "0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+          "hasContinuationPrompt": true,
+          "forbidden": []
+        }
+      ]
+    },
+    "no-session": {
+      "events": [
+        "spawn"
+      ],
+      "spawns": [
+        {
+          "argv": [
+            "-p",
+            "<iteration prompt>",
+            "--output-format",
+            "json",
+            "--stream",
+            "off",
+            "--no-color",
+            "--allow-all"
+          ],
+          "sessionId": null,
+          "hasContinuationPrompt": false,
+          "forbidden": []
+        }
+      ]
+    },
+    "provider-error": {
+      "events": [
+        "spawn"
+      ],
+      "spawns": [
+        {
+          "argv": [
+            "-p",
+            "<iteration prompt>",
+            "--output-format",
+            "json",
+            "--stream",
+            "off",
+            "--no-color",
+            "--allow-all"
+          ],
+          "sessionId": null,
+          "hasContinuationPrompt": false,
+          "forbidden": []
+        }
+      ]
+    },
+    "interrupt": {
+      "events": [
+        "spawn",
+        "spawn",
+        "continuation-hold",
+        "terminated"
+      ],
+      "spawns": [
+        {
+          "argv": [
+            "-p",
+            "<iteration prompt>",
+            "--output-format",
+            "json",
+            "--stream",
+            "off",
+            "--no-color",
+            "--allow-all"
+          ],
+          "sessionId": null,
+          "hasContinuationPrompt": false,
+          "forbidden": []
+        },
+        {
+          "argv": [
+            "--session-id",
+            "0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+            "-p",
+            "<continuation prompt>",
+            "--output-format",
+            "json",
+            "--stream",
+            "off",
+            "--no-color",
+            "--allow-all"
+          ],
+          "sessionId": "0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+          "hasContinuationPrompt": true,
+          "forbidden": []
+        }
+      ]
+    }
+  }
+}
