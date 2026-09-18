@@ -929,7 +929,10 @@ export class Renderer {
     );
 
     if (this.isFirstFrame || resized) {
-      process.stdout.write("\x1b[H" + nextCells.map(rowToString).join("\n"));
+      // Resize must erase the previous frame; cursor-home plus a rewrite
+      // leaves leftover cells from the old size.
+      const prefix = resized && !this.isFirstFrame ? "\x1b[2J\x1b[H" : "\x1b[H";
+      process.stdout.write(prefix + nextCells.map(rowToString).join("\n"));
       this.isFirstFrame = false;
     } else {
       const changes = diffFrames(this.prevCells, nextCells);
