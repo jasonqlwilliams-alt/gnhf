@@ -8,7 +8,11 @@ vi.mock("node:child_process", () => ({
 
 import { execFileSync, spawn } from "node:child_process";
 import { CopilotAgent } from "./copilot.js";
+import { CopilotEmptyTurnError } from "./copilot-session.js";
+import { EmptyAgentResponseError } from "./empty-response.js";
 import { buildAgentOutputSchema } from "./types.js";
+
+const COPILOT_SESSION_ID = "0cb916db-26aa-40f2-86b5-1ba81b225fd2";
 
 const mockSpawn = vi.mocked(spawn);
 
@@ -58,6 +62,10 @@ describe("CopilotAgent", () => {
         "--allow-all",
       ]),
     );
+    expect(args).not.toContain("--continue");
+    expect(args).not.toContain("--resume");
+    expect(args).not.toContain("-r");
+    expect(args).not.toContain("--session-id");
   });
 
   it("uses a shell on Windows for cmd wrapper paths", () => {
@@ -285,7 +293,58 @@ describe("CopilotAgent", () => {
     const promise = agent.run("test prompt", "/work/dir");
     proc.emit("close", 0);
 
-    await expect(promise).rejects.toThrow("copilot returned no agent message");
+    await expect(promise).rejects.toMatchObject({
+      name: "CopilotEmptyTurnError",
+      message: "copilot returned no agent message",
+      sessionId: null,
+    });
+  });
+
+  it("captures session.start data.sessionId from an empty Copilot turn", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new CopilotAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, {
+      type: "session.start",
+      data: {
+        sessionId: COPILOT_SESSION_ID,
+        version: 1,
+        producer: "copilot-agent",
+      },
+    });
+    emitJson(proc, {
+      type: "assistant.message",
+      data: { content: "", outputTokens: 0 },
+    });
+    proc.emit("close", 0);
+
+    await expect(promise).rejects.toMatchObject({
+      name: "CopilotEmptyTurnError",
+      message: "copilot returned no agent message",
+      sessionId: COPILOT_SESSION_ID,
+    });
+    await expect(promise).rejects.toBeInstanceOf(CopilotEmptyTurnError);
+    await expect(promise).rejects.not.toBeInstanceOf(EmptyAgentResponseError);
+  });
+
+  it("resumes that empty turn with --session-id and never --continue or --resume", () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new CopilotAgent({ sessionId: COPILOT_SESSION_ID });
+
+    agent.run("You did not produce a final answer. Continue.", "/work/dir");
+
+    const args = mockSpawn.mock.calls[0]![1] as string[];
+    const sessionFlagAt = args.indexOf("--session-id");
+    expect(sessionFlagAt).toBeGreaterThanOrEqual(0);
+    expect(args[sessionFlagAt + 1]).toBe(COPILOT_SESSION_ID);
+    expect(args).not.toContain("--continue");
+    expect(args).not.toContain("--resume");
+    expect(args).not.toContain("-r");
+    expect(args.some((arg) => arg.startsWith("--resume="))).toBe(false);
+    expect(args.some((arg) => arg.startsWith("--session-id="))).toBe(false);
   });
 
   it("rejects when the final assistant message is not valid JSON", async () => {
