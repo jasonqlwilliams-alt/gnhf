@@ -15,6 +15,7 @@ import {
   generateSideMeteorShower,
 } from "./renderer.js";
 import { rowToString } from "./renderer-diff.js";
+import { getMoonPhase } from "./utils/moon.js";
 import type {
   IterationRecord,
   Orchestrator,
@@ -226,6 +227,25 @@ describe("renderMoonStrip", () => {
       /[\u{1F311}\u{1F312}\u{1F313}\u{1F314}\u{1F315}\u{1F316}\u{1F317}\u{1F318}]/u,
     );
   });
+
+  it("reflows the active moon onto a later row instead of clipping it on a narrow width", () => {
+    const now = 400;
+    const activeMoon = getMoonPhase("active", now, 1600);
+    const strip = renderMoonStrip(
+      Array.from({ length: 24 }, () => ({ success: true })),
+      true,
+      now,
+      20,
+    );
+
+    expect(strip).toHaveLength(3);
+    expect(strip.at(-1)).toContain(activeMoon);
+    expect(strip[0]).not.toContain(activeMoon);
+    for (const row of strip) {
+      const moonCount = [...row.matchAll(/[\u{1F311}-\u{1F318}]/gu)].length;
+      expect(moonCount).toBeLessThanOrEqual(10);
+    }
+  });
 });
 
 describe("renderStarFieldLines", () => {
@@ -429,17 +449,17 @@ describe("buildFrame", () => {
       status: "stopped",
       gracefulStopRequested: false,
       interruptHint: "force-stop",
-      currentIteration: 61,
+      currentIteration: 65,
       totalInputTokens: 0,
       totalOutputTokens: 0,
       totalCacheReadTokens: 0,
       totalCacheCreationTokens: 0,
       tokensEstimated: false,
       commitCount: 0,
-      iterations: Array.from({ length: 61 }, (_, index) =>
+      iterations: Array.from({ length: 65 }, (_, index) =>
         createIteration({ number: index + 1, success: true }),
       ),
-      successCount: 61,
+      successCount: 65,
       failCount: 0,
       consecutiveFailures: 0,
       consecutiveErrors: 0,
@@ -469,6 +489,52 @@ describe("buildFrame", () => {
       "[graceful stop requested, ctrl+c again to force stop, gnhf again to resume]",
     );
     expect(plainLines.at(-1)?.trim()).toBe("");
+  });
+
+  it("keeps the active moon visible after resizing to a narrow terminal", () => {
+    const now = 400;
+    const activeMoon = getMoonPhase("active", now, 1600);
+    const state: OrchestratorState = {
+      status: "running",
+      gracefulStopRequested: false,
+      interruptHint: "resume",
+      currentIteration: 25,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
+      tokensEstimated: false,
+      commitCount: 0,
+      iterations: Array.from({ length: 24 }, (_, index) =>
+        createIteration({ number: index + 1, success: true }),
+      ),
+      successCount: 24,
+      failCount: 0,
+      consecutiveFailures: 0,
+      consecutiveErrors: 0,
+      startTime: new Date("2026-01-01T00:00:00Z"),
+      waitingUntil: null,
+      lastMessage: null,
+    };
+
+    for (const terminalWidth of [80, 40, 20]) {
+      const frame = buildFrameCells(
+        "ship it",
+        "claude",
+        state,
+        [],
+        [],
+        [],
+        now,
+        terminalWidth,
+        40,
+      );
+
+      expect(frame.every((row) => row.length === terminalWidth)).toBe(true);
+      expect(frame.map(rowToString).map(stripAnsi).join("\n")).toContain(
+        activeMoon,
+      );
+    }
   });
 
   it("does not let wide agent text push side stars out of position", () => {
@@ -879,6 +945,35 @@ describe("buildContentCells adaptive height", () => {
 
     expect(text).toContain("00:01:00");
     expect(rows.length).toBeLessThanOrEqual(22);
+  });
+
+  it("keeps the newest wrapped moon row when height cannot fit the full strip", () => {
+    const now = 400;
+    const activeMoon = getMoonPhase("active", now, 1600);
+    const rows = buildContentCells(
+      "my prompt",
+      "claude",
+      {
+        ...state,
+        iterations: Array.from({ length: 50 }, (_, index) =>
+          createIteration({ number: index + 1, success: true }),
+        ),
+      },
+      "00:01:00",
+      now,
+      2,
+      20,
+    );
+    const moonRows = rows.filter((row) =>
+      /[\u{1F311}-\u{1F318}]/u.test(rowToString(row)),
+    );
+
+    expect(moonRows).toHaveLength(1);
+    const moonCount = [
+      ...rowToString(moonRows[0]).matchAll(/[\u{1F311}-\u{1F318}]/gu),
+    ].length;
+    expect(moonCount).toBeLessThanOrEqual(10);
+    expect(rowToString(moonRows[0])).toContain(activeMoon);
   });
 
   it("drops all moon rows when no moon rows fit", () => {
