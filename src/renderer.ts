@@ -544,13 +544,6 @@ function renderResumeHintCells(
 
 // ── Build full frame (cell-based) ────────────────────────────
 
-/**
- * Builds the centered content viewport for the renderer.
- *
- * When `availableHeight` is constrained, the layout drops optional sections in
- * priority order (ASCII art, eyebrow, agent message, then prompt) so the stats
- * row remains visible and any remaining space is used for the newest moon rows.
- */
 function unfoldedMessageLineCap(availableHeight?: number): number {
   if (availableHeight == null || !Number.isFinite(availableHeight)) {
     return Number.POSITIVE_INFINITY;
@@ -559,6 +552,16 @@ function unfoldedMessageLineCap(availableHeight?: number): number {
   return Math.max(MAX_MSG_LINES, availableHeight - reservedStatsRows);
 }
 
+/**
+ * Builds the centered content viewport for the renderer.
+ *
+ * When `availableHeight` is constrained, optional sections drop so the stats
+ * row stays visible and leftover space goes to the newest moon rows. Folded
+ * layout drops ASCII art, eyebrow, agent message, then prompt. Unfolded layout
+ * keeps the agent pane, drops ASCII art, eyebrow, then prompt, caps the
+ * message so stats still fit, and clips leftover non-moon rows to
+ * `availableHeight`.
+ */
 export function buildContentCells(
   prompt: string,
   agentName: string,
