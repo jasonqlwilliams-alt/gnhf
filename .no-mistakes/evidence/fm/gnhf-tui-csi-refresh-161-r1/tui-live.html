@@ -1,0 +1,139 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>gnhf TUI CSI / Ctrl+L live evidence</title>
+<style>
+  body { background:#0b1020; color:#d7e0f2; font-family: ui-sans-serif, system-ui, sans-serif; margin:24px; }
+  h1,h2,h3 { font-weight:600; }
+  .term { background:#070b14; color:#c8d4ea; padding:16px 18px; border-radius:10px;
+           font: 14px/1.25 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+           white-space:pre; overflow:auto; border:1px solid #223049; min-height: 280px; }
+  .raw { background:#111827; color:#9ca3af; padding:12px; font:12px/1.4 ui-monospace,monospace;
+          white-space:pre-wrap; word-break:break-all; max-height:220px; overflow:auto; }
+</style></head>
+<body>
+<h1>gnhf live TUI: CSI sanitize and Ctrl+L refresh</h1>
+<p>Captured from the real <code>dist/cli.mjs</code> process in a PTY.</p>
+<section><h2>--mock before Ctrl+L</h2><pre class="term">
+    ⋆                        g n h f  ·  c o d e x
+
+   °
+     ✧      ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻
+            ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹
+
+          let&#x27;s minimize app startup latency without sacrificing any    ·
+                                 functionality
+                                                                          ·
+°
+
+           08:07:17 · 88.2M total · 87.3M in · 860K out · 11 commits
+
+                                                                       °
+            Reading src/bootstrap.ts to trace the module init order
+
+
+°
+    °
+                         🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌗
+                     [ctrl+c to stop, gnhf again to resume]
+</pre></section><section><h2>--mock after Ctrl+L (full erase-then-redraw)</h2><pre class="term">
+    ⋆                        g n h f  ·  c o d e x
+
+   °
+     ✧      ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻
+            ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹
+
+          let&#x27;s minimize app startup latency without sacrificing any    ·
+                                 functionality
+                                                                          ·
+°
+
+           08:07:17 · 88.2M total · 87.3M in · 860K out · 11 commits
+
+                                                                       °
+            Reading src/bootstrap.ts to trace the module init order
+
+
+°
+    °
+                         🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌗            🌒
+                     [ctrl+c to stop, gnhf again to resume]
+</pre></section><section><h2>--mock after shrink (resize erase kept)</h2><pre class="term">
+
+
+
+  let&#x27;s minimize app startup latency without sacrificing any
+
+                         functionality
+
+
+
+
+
+
+
+   08:07:18 · 88.2M total · 87.3M in · 860K out · 11 commits
+                                           🌖
+
+</pre></section><section><h2>live run: CSI lastMessage sanitized</h2><pre class="term">
+                            g n h f  ·  c l a u d e
+      ·                                                                    ⋆
+                                                                           ·  ⋆
+            ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻
+     ⋆      ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹
+
+                  keep the run alive through CSI lastMessage
+
+
+                                                                        °     ·
+
+                00:00:00 · 19 total · 12 in · 7 out · 0 commits
+
+·
+                           reading files stuck line
+                                                                        · ⋆
+
+                                                                       ✧
+
+                                      🌒
+                     [ctrl+c to stop, gnhf again to resume]
+</pre></section><section><h2>live run: Ctrl+L after CSI lastMessage</h2><pre class="term">
+                            g n h f  ·  c l a u d e
+      ·                                                                    ⋆
+                                                                           ·  ⋆
+            ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻
+     ⋆      ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹
+
+                  keep the run alive through CSI lastMessage
+ ⋆
+
+                                                                        °     ·
+
+                00:00:00 · 19 total · 12 in · 7 out · 0 commits
+
+·
+                           reading files stuck line
+                                                                        · ⋆
+
+                                                                       ✧
+
+                                      🌔
+                     [ctrl+c to stop, gnhf again to resume]
+</pre></section>
+<h3>Ctrl+L byte slice</h3><pre class='raw'>[2J[H                                                                               
+    [1m⋆[0m                        [2mg n h f[0m  [2m·[0m  [2mc o d e x[0m                             
+                                                                               
+   [2m°[0m                                                                           
+     [1m✧[0m      [1m┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻[0m            
+            [1m┃╺┓┃ ┃┃ ┃ ┃┃   ┃</pre><h3>resize byte slice</h3><pre class='raw'>]2;gnhf 🌔 · 88.2M total · 87.3M in · 860K out · 11 commits[2J[H                                                               
+                                                               
+  [2mlet&#x27;s minimize app startup latency without sacrificing any[0m   
+                         [2mfunctionality[0m                         
+                                                               
+                                                               
+                           </pre><h3>git log after CSI run</h3><pre class='raw'>cb0f14b gnhf 1: kept working after CSI lastMessage
+5da0424 init
+</pre>
+</body></html>

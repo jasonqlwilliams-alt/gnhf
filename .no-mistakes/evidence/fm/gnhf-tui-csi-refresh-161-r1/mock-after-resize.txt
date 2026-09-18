@@ -1,0 +1,18 @@
+
+
+
+
+  let's minimize app startup latency without sacrificing any
+
+                         functionality
+
+
+
+
+
+
+
+   08:07:18 · 88.2M total · 87.3M in · 860K out · 11 commits
+                                           🌖
+
+

@@ -1,0 +1,28 @@
+{
+  "mock": {
+    "first_frame": true,
+    "ctrl_l_erase": true,
+    "ctrl_l_kept_tui": true,
+    "later_tick_no_erase": true,
+    "resize_erase": true,
+    "resize_kept_prompt": true,
+    "erase_before_ctrl_l": 0
+  },
+  "csi": {
+    "saw_sanitized_message": true,
+    "title_survived": true,
+    "prompt_survived": true,
+    "stats_survived": false,
+    "leaked_erase_in_message": false,
+    "leaked_cup": false,
+    "leaked_cuu": false,
+    "ctrl_l_erase": true,
+    "ctrl_l_kept_message": true,
+    "ctrl_l_kept_chrome": true,
+    "committed": true,
+    "commits": "cb0f14b gnhf 1: kept working after CSI lastMessage\n5da0424 init\n",
+    "survived_file": true,
+    "survived_text": "work was not lost\n",
+    "finished": true
+  }
+}
