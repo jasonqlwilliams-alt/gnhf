@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<title>gnhf moon strip live frames</title>
+<style>
+body{background:#0b1020;color:#d7e0ea;font-family:ui-sans-serif,system-ui,sans-serif;margin:20px;}
+h1{font-size:22px;margin:0 0 8px}
+.sub{color:#8aa0b5;margin:0 0 20px;font-size:14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+figure{margin:0}
+figcaption{font-size:13px;color:#c6d4e3;margin:0 0 8px;min-height:36px}
+.term{background:#111827;border:1px solid #334155;border-radius:8px;padding:10px;width:max-content;max-width:100%}
+pre{margin:0;font:14px/1.2 "Noto Sans Mono","DejaVu Sans Mono",ui-monospace,monospace;white-space:pre}
+</style></head>
+<body>
+<h1>Live gnhf --mock moon strip</h1>
+<p class="sub">Real TUI pane captures from dist/cli.mjs --mock. Narrow terminals wrap the moon strip; the animated active moon stays visible; no moon-strip elision marker.</p>
+<div class="grid">
+<figure><figcaption>Wide 80×24 — single moon row, active moon at the end</figcaption><div class='term'><pre>                                                                              · 
+                             g n h f  ·  c o d e x                              
+                                                                                
+                                                                          ·     
+   ·        ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻             
+            ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫             
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹          ✧· 
+                                                                                
+           let's minimize app startup latency without sacrificing any    ⋆      
+    ✧                            functionality                          ·       
+                                                                                
+  °                                                                          ·  
+                                                                                
+           08:07:17 · 88.2M total · 87.3M in · 860K out · 11 commits            
+                                                                                
+                                                                          °     
+            Reading src/bootstrap.ts to trace the module init order             
+    ⋆                                                                           
+     °                                                                          
+   °   ·                                                                        
+                                                                          ··    
+  ·                       🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌓                          
+                     [ctrl+c to stop, gnhf again to resume]                     
+                                                                                
+</pre></div></figure>
+<figure><figcaption>Narrow 20×24 — strip wraps; active moon on row 2</figcaption><div class='term'><pre>                    
+g n h f  ·  c o d e 
+                    
+                    
+                    
+ let's minimize app 
+  startup latency   
+without sacrificing…
+                    
+                    
+08:07:17 · 88.2M tot
+                    
+                    
+Reading src/bootstra
+                    
+                    
+                    
+                    
+🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕
+      🌕🌕🌕🌒      
+                    
+                    
+[ctrl+c to stop, gnh
+                    
+</pre></div></figure>
+<figure><figcaption>Same 20×24 ~800ms later — active moon advanced (animating)</figcaption><div class='term'><pre>                    
+g n h f  ·  c o d e 
+                    
+                    
+                    
+ let's minimize app 
+  startup latency   
+without sacrificing…
+                    
+                    
+08:07:18 · 88.2M tot
+                    
+                    
+Reading src/bootstra
+                    
+                    
+                    
+                    
+🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕
+      🌕🌕🌕🌖      
+                    
+                    
+[ctrl+c to stop, gnh
+                    
+</pre></div></figure>
+<figure><figcaption>Live resize 80→20 — reflowed; active moon still visible</figcaption><div class='term'><pre>                    
+g n h f  ·  c o d e 
+                    
+                    
+                    
+ let's minimize app 
+  startup latency   
+without sacrificing…
+                    
+                    
+08:07:18 · 88.2M tot
+                    
+                    
+Reading src/bootstra
+                    
+                    
+                    
+                    
+🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕
+      🌕🌕🌕🌗      
+                    
+                    
+[ctrl+c to stop, gnh
+                    
+</pre></div></figure>
+<figure><figcaption>Adversarial 8×24 — four wrap rows, no elision marker</figcaption><div class='term'><pre>        
+g n h f 
+        
+        
+        
+ let's  
+minimize
+  app…  
+        
+        
+08:07:17
+        
+        
+Reading 
+        
+        
+        
+        
+🌕🌕🌕🌑
+🌕🌕🌕🌑
+🌕🌕🌕🌕
+  🌕🌔  
+[ctrl+c 
+        
+</pre></div></figure>
+<figure><figcaption>Tight 20×10 — newest wrapped row with active moon kept</figcaption><div class='term'><pre>                    
+08:07:17 · 88.2M tot
+                    
+                    
+🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕
+      🌕🌕🌕🌘      
+                    
+                    
+[ctrl+c to stop, gnh
+                    
+</pre></div></figure>
+</div></body></html>

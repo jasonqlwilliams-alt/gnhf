@@ -1,0 +1,157 @@
+{
+  "frames": [
+    {
+      "name": "narrow-20x24-t0",
+      "title": "Narrow 20×24 at t0",
+      "caption": "Fresh --mock on a 20-column terminal",
+      "analysis": {
+        "display": "20x24",
+        "moon_row_count": 2,
+        "moons_per_row": [
+          10,
+          4
+        ],
+        "total_moons": 14,
+        "last_moon": "🌒",
+        "moon_rows": [
+          "🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕",
+          "      🌕🌕🌕🌒      "
+        ],
+        "has_elision": false,
+        "overwide_lines": [],
+        "contains_ctrlc_hint": true
+      },
+      "plain_path": "/home/jason/.no-mistakes/evidence/01M2TXY104986MW1TQAVDDCMN9/narrow-20x24-t0.txt"
+    },
+    {
+      "name": "narrow-20x24-t1",
+      "title": "Narrow 20×24 at t1 (~800ms later)",
+      "caption": "Same session; active moon should still be visible and may have advanced",
+      "analysis": {
+        "display": "20x24",
+        "moon_row_count": 2,
+        "moons_per_row": [
+          10,
+          4
+        ],
+        "total_moons": 14,
+        "last_moon": "🌖",
+        "moon_rows": [
+          "🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕",
+          "      🌕🌕🌕🌖      "
+        ],
+        "has_elision": false,
+        "overwide_lines": [],
+        "contains_ctrlc_hint": true
+      },
+      "plain_path": "/home/jason/.no-mistakes/evidence/01M2TXY104986MW1TQAVDDCMN9/narrow-20x24-t1.txt"
+    },
+    {
+      "name": "wide-80x24",
+      "title": "Wide 80×24 before resize",
+      "caption": "All completed moons plus the active moon on one row",
+      "analysis": {
+        "display": "80x24",
+        "moon_row_count": 1,
+        "moons_per_row": [
+          14
+        ],
+        "total_moons": 14,
+        "last_moon": "🌓",
+        "moon_rows": [
+          "  ·                       🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌓                          "
+        ],
+        "has_elision": false,
+        "overwide_lines": [],
+        "contains_ctrlc_hint": true
+      },
+      "plain_path": "/home/jason/.no-mistakes/evidence/01M2TXY104986MW1TQAVDDCMN9/wide-80x24.txt"
+    },
+    {
+      "name": "resized-20x24",
+      "title": "After live resize 80→20",
+      "caption": "SIGWINCH reflow; active moon must remain visible on a wrapped row",
+      "analysis": {
+        "display": "20x24",
+        "moon_row_count": 2,
+        "moons_per_row": [
+          10,
+          4
+        ],
+        "total_moons": 14,
+        "last_moon": "🌗",
+        "moon_rows": [
+          "🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕",
+          "      🌕🌕🌕🌗      "
+        ],
+        "has_elision": false,
+        "overwide_lines": [],
+        "contains_ctrlc_hint": true
+      },
+      "plain_path": "/home/jason/.no-mistakes/evidence/01M2TXY104986MW1TQAVDDCMN9/resized-20x24.txt"
+    },
+    {
+      "name": "narrow-8x24",
+      "title": "Adversarial 8×24",
+      "caption": "Four moons per row; wrap instead of clip or elide",
+      "analysis": {
+        "display": "8x24",
+        "moon_row_count": 4,
+        "moons_per_row": [
+          4,
+          4,
+          4,
+          2
+        ],
+        "total_moons": 14,
+        "last_moon": "🌔",
+        "moon_rows": [
+          "🌕🌕🌕🌑",
+          "🌕🌕🌕🌑",
+          "🌕🌕🌕🌕",
+          "  🌕🌔  "
+        ],
+        "has_elision": false,
+        "overwide_lines": [],
+        "contains_ctrlc_hint": true
+      },
+      "plain_path": "/home/jason/.no-mistakes/evidence/01M2TXY104986MW1TQAVDDCMN9/narrow-8x24.txt"
+    },
+    {
+      "name": "tight-20x10",
+      "title": "Tight 20×10",
+      "caption": "Height cannot fit the full chrome; newest moon row must stay",
+      "analysis": {
+        "display": "20x10",
+        "moon_row_count": 2,
+        "moons_per_row": [
+          10,
+          4
+        ],
+        "total_moons": 14,
+        "last_moon": "🌘",
+        "moon_rows": [
+          "🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕",
+          "      🌕🌕🌕🌘      "
+        ],
+        "has_elision": false,
+        "overwide_lines": [],
+        "contains_ctrlc_hint": true
+      },
+      "plain_path": "/home/jason/.no-mistakes/evidence/01M2TXY104986MW1TQAVDDCMN9/tight-20x10.txt"
+    }
+  ],
+  "checks": {
+    "narrow_wraps": true,
+    "active_visible_narrow": true,
+    "animation_or_stable_active": true,
+    "active_phase_changed": true,
+    "wide_single_row": true,
+    "resize_reflow": true,
+    "no_elision": true,
+    "eight_col_wraps": true,
+    "tight_keeps_newest": true,
+    "product_alive": true
+  },
+  "html": "/home/jason/.no-mistakes/evidence/01M2TXY104986MW1TQAVDDCMN9/moon-strip-live.html"
+}

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>gnhf moon strip reflow — live TUI captures</title>
+  <style>
+    body { background:#0b1020; color:#d7e0ea; font-family: ui-sans-serif, system-ui, sans-serif; margin:24px; }
+    h1 { font-size:20px; }
+    h2 { font-size:16px; margin-top:32px; }
+    h3 { font-size:13px; color:#8aa0b5; }
+    .meta { color:#8aa0b5; font-size:13px; }
+    .term { background:#111827; border:1px solid #243044; border-radius:8px; padding:12px; overflow:auto; width:max-content; max-width:100%; }
+    pre { margin:0; font-family: "Noto Sans Mono", "DejaVu Sans Mono", ui-monospace, monospace; font-size:14px; line-height:1.25; white-space:pre; }
+    .moon pre { letter-spacing:0; }
+  </style>
+</head>
+<body>
+  <h1>Live gnhf --mock moon strip</h1>
+  <p>Each frame is a tmux pane capture of the real <code>dist/cli.mjs --mock</code> TUI, not a unit-test fixture.</p>
+  
+<section>
+  <h2>Narrow 20×24 at t0</h2>
+  <p class="meta">Fresh --mock on a 20-column terminal · tmux 20x24 · moons 14 across 2 row(s)</p>
+  <div class="term"><pre>                    
+g n h f  ·  c o d e 
+                    
+                    
+                    
+ let's minimize app 
+  startup latency   
+without sacrificing…
+                    
+                    
+08:07:17 · 88.2M tot
+                    
+                    
+Reading src/bootstra
+                    
+                    
+                    
+                    
+🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕
+      🌕🌕🌕🌒      
+                    
+                    
+[ctrl+c to stop, gnh
+                    
+</pre></div>
+  <h3>Moon rows only</h3>
+  <div class="term moon"><pre>🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕
+      🌕🌕🌕🌒      </pre></div>
+</section>
+
+<section>
+  <h2>Narrow 20×24 at t1 (~800ms later)</h2>
+  <p class="meta">Same session; active moon should still be visible and may have advanced · tmux 20x24 · moons 14 across 2 row(s)</p>
+  <div class="term"><pre>                    
+g n h f  ·  c o d e 
+                    
+                    
+                    
+ let's minimize app 
+  startup latency   
+without sacrificing…
+                    
+                    
+08:07:18 · 88.2M tot
+                    
+                    
+Reading src/bootstra
+                    
+                    
+                    
+                    
+🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕
+      🌕🌕🌕🌖      
+                    
+                    
+[ctrl+c to stop, gnh
+                    
+</pre></div>
+  <h3>Moon rows only</h3>
+  <div class="term moon"><pre>🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕
+      🌕🌕🌕🌖      </pre></div>
+</section>
+
+<section>
+  <h2>Wide 80×24 before resize</h2>
+  <p class="meta">All completed moons plus the active moon on one row · tmux 80x24 · moons 14 across 1 row(s)</p>
+  <div class="term"><pre>                                                                              · 
+                             g n h f  ·  c o d e x                              
+                                                                                
+                                                                          ·     
+   ·        ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻             
+            ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫             
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹          ✧· 
+                                                                                
+           let's minimize app startup latency without sacrificing any    ⋆      
+    ✧                            functionality                          ·       
+                                                                                
+  °                                                                          ·  
+                                                                                
+           08:07:17 · 88.2M total · 87.3M in · 860K out · 11 commits            
+                                                                                
+                                                                          °     
+            Reading src/bootstrap.ts to trace the module init order             
+    ⋆                                                                           
+     °                                                                          
+   °   ·                                                                        
+                                                                          ··    
+  ·                       🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌓                          
+                     [ctrl+c to stop, gnhf again to resume]                     
+                                                                                
+</pre></div>
+  <h3>Moon rows only</h3>
+  <div class="term moon"><pre>  ·                       🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌓                          </pre></div>
+</section>
+
+<section>
+  <h2>After live resize 80→20</h2>
+  <p class="meta">SIGWINCH reflow; active moon must remain visible on a wrapped row · tmux 20x24 · moons 14 across 2 row(s)</p>
+  <div class="term"><pre>                    
+g n h f  ·  c o d e 
+                    
+                    
+                    
+ let's minimize app 
+  startup latency   
+without sacrificing…
+                    
+                    
+08:07:18 · 88.2M tot
+                    
+                    
+Reading src/bootstra
+                    
+                    
+                    
+                    
+🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕
+      🌕🌕🌕🌗      
+                    
+                    
+[ctrl+c to stop, gnh
+                    
+</pre></div>
+  <h3>Moon rows only</h3>
+  <div class="term moon"><pre>🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕
+      🌕🌕🌕🌗      </pre></div>
+</section>
+
+<section>
+  <h2>Adversarial 8×24</h2>
+  <p class="meta">Four moons per row; wrap instead of clip or elide · tmux 8x24 · moons 14 across 4 row(s)</p>
+  <div class="term"><pre>        
+g n h f 
+        
+        
+        
+ let's  
+minimize
+  app…  
+        
+        
+08:07:17
+        
+        
+Reading 
+        
+        
+        
+        
+🌕🌕🌕🌑
+🌕🌕🌕🌑
+🌕🌕🌕🌕
+  🌕🌔  
+[ctrl+c 
+        
+</pre></div>
+  <h3>Moon rows only</h3>
+  <div class="term moon"><pre>🌕🌕🌕🌑
+🌕🌕🌕🌑
+🌕🌕🌕🌕
+  🌕🌔  </pre></div>
+</section>
+
+<section>
+  <h2>Tight 20×10</h2>
+  <p class="meta">Height cannot fit the full chrome; newest moon row must stay · tmux 20x10 · moons 14 across 2 row(s)</p>
+  <div class="term"><pre>                    
+08:07:17 · 88.2M tot
+                    
+                    
+🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕
+      🌕🌕🌕🌘      
+                    
+                    
+[ctrl+c to stop, gnh
+                    
+</pre></div>
+  <h3>Moon rows only</h3>
+  <div class="term moon"><pre>🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕
+      🌕🌕🌕🌘      </pre></div>
+</section>
+
+</body>
+</html>
