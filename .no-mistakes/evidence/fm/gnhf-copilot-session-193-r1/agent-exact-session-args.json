@@ -1,0 +1,40 @@
+{
+  "sessionId": "0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+  "argv": [
+    "--session-id",
+    "0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+    "-p",
+    "You did not produce a final answer. Continue.\n\n## gnhf final output contract\n\nWhen the iteration is complete, your final answer must be a single JSON object that matches this JSON Schema:\n\n```json\n{\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"properties\": {\n    \"success\": {\n      \"type\": \"boolean\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"key_changes_made\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"key_learnings\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  },\n  \"required\": [\n    \"success\",\n    \"summary\",\n    \"key_changes_made\",\n    \"key_learnings\"\n  ]\n}\n```\n\nReturn only the JSON object in the final answer. Do not wrap it in Markdown. Do not include explanatory prose outside the JSON object.",
+    "--output-format",
+    "json",
+    "--stream",
+    "off",
+    "--no-color",
+    "--allow-all"
+  ],
+  "spawns": [
+    {
+      "timestamp": "2026-09-18T21:20:37.925Z",
+      "pid": 617903,
+      "event": "spawn",
+      "mode": "success",
+      "argv": [
+        "--session-id",
+        "0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+        "-p",
+        "You did not produce a final answer. Continue.\n\n## gnhf final output contract\n\nWhen the iteration is complete, your final answer must be a single JSON object that matches this JSON Schema:\n\n```json\n{\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"properties\": {\n    \"success\": {\n      \"type\": \"boolean\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"key_changes_made\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"key_learnings\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  },\n  \"required\": [\n    \"success\",\n    \"summary\",\n    \"key_changes_made\",\n    \"key_learnings\"\n  ]\n}\n```\n\nReturn only the JSON object in the final answer. Do not wrap it in Markdown. Do not include explanatory prose outside the JSON object.",
+        "--output-format",
+        "json",
+        "--stream",
+        "off",
+        "--no-color",
+        "--allow-all"
+      ],
+      "cwd": "/tmp/gnhf-copilot-agent-resume-A4O4ZJ",
+      "hasContinue": false,
+      "hasResume": false,
+      "hasSessionId": true,
+      "sessionIdValue": "0cb916db-26aa-40f2-86b5-1ba81b225fd2"
+    }
+  ]
+}

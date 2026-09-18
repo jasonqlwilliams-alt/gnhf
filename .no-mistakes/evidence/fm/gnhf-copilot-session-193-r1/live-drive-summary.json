@@ -1,0 +1,31 @@
+{
+  "sessionId": "0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+  "results": [
+    {
+      "name": "User cannot sneak Copilot recency --continue, interactive --resume, or --session-id through config",
+      "ok": true,
+      "evidence": "/home/jason/.no-mistakes/evidence/01M2V5XDV08AWHB8P6Y2GBYJ53/reserved-session-flags.json",
+      "detail": "gnhf rejected all 6 reserved session flags with \"managed by gnhf\""
+    },
+    {
+      "name": "A successful Copilot JSONL turn with session.start commits one iteration and never passes --continue or --resume",
+      "ok": true,
+      "evidence": "/home/jason/.no-mistakes/evidence/01M2V5XDV08AWHB8P6Y2GBYJ53/successful-session-start.json",
+      "detail": "gnhf committed gnhf 1: copilot mock wrote hello.txt; mock argv had no recency/resume flags"
+    },
+    {
+      "name": "An empty Copilot final fails the iteration without a same-session --session-id recovery spawn",
+      "ok": true,
+      "evidence": "/home/jason/.no-mistakes/evidence/01M2V5XDV08AWHB8P6Y2GBYJ53/empty-turn-no-recovery.json",
+      "detail": "one spawn, CopilotEmptyTurnError, no --session-id/--continue/--resume"
+    },
+    {
+      "name": "A Copilot turn that emits session.start but no assistant.message still fails once without resume flags",
+      "ok": true,
+      "evidence": "/home/jason/.no-mistakes/evidence/01M2V5XDV08AWHB8P6Y2GBYJ53/empty-turn-no-assistant.json",
+      "detail": "single spawn, CopilotEmptyTurnError, no resume flags"
+    }
+  ],
+  "passed": 4,
+  "failed": 0
+}

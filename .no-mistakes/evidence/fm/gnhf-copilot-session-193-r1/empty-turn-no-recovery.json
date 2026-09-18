@@ -1,0 +1,52 @@
+{
+  "code": 0,
+  "stdout": "\u001b[?1049h\u001b[?25l\u001b[H                                                                                \n  \u001b[1m·\u001b[0m                        \u001b[2mg n h f\u001b[0m  \u001b[2m·\u001b[0m  \u001b[2mc o p i l o t\u001b[0m                            \n                                                                                \n      \u001b[1m·\u001b[0m                                                                         \n            \u001b[1m┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻\u001b[0m             \n            \u001b[1m┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫\u001b[0m             \n            \u001b[1m┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹\u001b[0m             \n                                                                                \n                              \u001b[2msummarize the change\u001b[0m                          \u001b[1m·\u001b[0m   \n                                                                                \n                                                                                \n     \u001b[1m·\u001b[0m                                                                          \n                                                                                \n                 \u001b[1m00:00:00\u001b[0m \u001b[2m·\u001b[0m 0 total \u001b[2m·\u001b[0m 0 in \u001b[2m·\u001b[0m 0 out \u001b[2m·\u001b[0m 0 commits                  \n                                                                            \u001b[1m°\u001b[0m   \n\u001b[2m·\u001b[0m                                                                              \u001b[1m°\u001b[0m\n                                   \u001b[2mworking...\u001b[0m                                   \n    \u001b[2m·\u001b[0m                                                                           \n                                                                                \n                                                                                \n                                                                                \n\u001b[2m·\u001b[0m                                      🌖                                       \n                     \u001b[2m[ctrl+c to stop, gnhf again to resume]\u001b[0m                     \n                                                                                \u001b[?25h\u001b[?1049l\n╭────────────────────────────────────────────────────────────────╮\n│ × gnhf stopped                                                 │\n│   copilot ran for 0s before: copilot returned no agent message │\n╰────────────────────────────────────────────────────────────────╯\n\n  iterations      1 total       0 good       1 failed\n  tokens          0 total       0 in         0 out\n  branch diff     0 commits     +0           -0\n  files           0 added       0 updated    0 deleted\n\n  notes           /tmp/gnhf-copilot-repo-vxYXFW/.gnhf/runs/summarize-the-change-f8aafc/notes.md\n  debug log       /tmp/gnhf-copilot-repo-vxYXFW/.gnhf/runs/summarize-the-change-f8aafc/gnhf.log\n\n  next steps      git log --oneline db54a1ec3f2e..HEAD\n                  git diff --stat db54a1ec3f2e..HEAD\n                  gh pr create\n\n  too much        git push no-mistakes:\n  to review?      https://github.com/kunchenguid/no-mistakes\n",
+  "stderr": "\n  gnhf: Run log: /tmp/gnhf-copilot-repo-vxYXFW/.gnhf/runs/summarize-the-change-f8aafc/gnhf.log\n\n",
+  "mockSpawns": [
+    {
+      "timestamp": "2026-09-18T21:19:45.171Z",
+      "pid": 550429,
+      "event": "spawn",
+      "mode": "empty",
+      "argv": [
+        "-p",
+        "You are working autonomously towards an objective given below.\nThis is iteration 1. Each iteration aims to make an incremental step forward, not to complete the entire objective.\n\n## Instructions\n\n1. Read .gnhf/runs/summarize-the-change-f8aafc/notes.md first to understand what has been done in previous iterations. Do NOT write to or modify notes.md - it is maintained automatically by the gnhf orchestrator\n2. Identify the next smallest logical unit of work that's individually verifiable and would make incremental progress towards the objective, and treat that as the scope of this iteration\n3. If you attempted a solution and it didn't end up moving the needle on the objective, document learnings and record success=false, then conclude the iteration rather than continuously pivoting\n4. If you made code changes, run build/tests/linters/formatters if available to validate your work. Do NOT make any git commits - that will be handled automatically by the gnhf orchestrator\n5. If you started any long-running background processes (dev servers, browsers, watchers, Electron, etc.), stop them before finishing the iteration\n6. Only submit the final JSON object after the result is final: your work is complete, validation is done, and you have stopped any background processes you started\n\n## Output\n\n- success: whether you were able to make a meaningful contribution that got us closer towards the objective. setting this to false means any code change you made should be discarded. A complete no-op iteration (no file changes AND no new meaningful learnings worth recording) is not a success - set success=false so the run can halt rather than spin on no-op iterations\n- summary: a concise one-sentence summary of the accomplishment in this iteration\n- key_changes_made: an array of descriptions for key changes you made. don't group this by file - group by logical units of work. don't describe activities - describe material outcomes\n- key_learnings: an array of new learnings that were surprising, weren't captured by previous notes and would be informative for future iterations\n\n## Objective\n\nsummarize the change\n\n## gnhf final output contract\n\nWhen the iteration is complete, your final answer must be a single JSON object that matches this JSON Schema:\n\n```json\n{\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"properties\": {\n    \"success\": {\n      \"type\": \"boolean\"\n    },\n    \"summary\": {\n      \"type\": \"string\"\n    },\n    \"key_changes_made\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"key_learnings\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  },\n  \"required\": [\n    \"success\",\n    \"summary\",\n    \"key_changes_made\",\n    \"key_learnings\"\n  ]\n}\n```\n\nReturn only the JSON object in the final answer. Do not wrap it in Markdown. Do not include explanatory prose outside the JSON object.",
+        "--output-format",
+        "json",
+        "--stream",
+        "off",
+        "--no-color",
+        "--allow-all"
+      ],
+      "cwd": "/tmp/gnhf-copilot-repo-vxYXFW",
+      "hasContinue": false,
+      "hasResume": false,
+      "hasSessionId": false,
+      "sessionIdValue": null
+    }
+  ],
+  "errorEvent": {
+    "timestamp": "2026-09-18T21:19:45.180Z",
+    "pid": 550033,
+    "event": "agent:run:error",
+    "iteration": 1,
+    "elapsedMs": 66,
+    "error": {
+      "name": "CopilotEmptyTurnError",
+      "message": "copilot returned no agent message",
+      "stack": "CopilotEmptyTurnError: copilot returned no agent message\n    at file:///home/jason/.no-mistakes/worktrees/81d474556c1c/01M2V5XDV08AWHB8P6Y2GBYJ53/dist/cli.mjs:15002:13\n    at ChildProcess.<anonymous> (file:///home/jason/.no-mistakes/worktrees/81d474556c1c/01M2V5XDV08AWHB8P6Y2GBYJ53/dist/cli.mjs:14297:3)\n    at ChildProcess.emit (node:events:531:35)\n    at maybeClose (node:internal/child_process:1101:16)\n    at ChildProcess._handle.onexit (node:internal/child_process:304:5)"
+    }
+  },
+  "notes": "# gnhf run: summarize-the-change-f8aafc\n\nObjective: see .gnhf/runs/summarize-the-change-f8aafc/prompt.md\n\n## Iteration Log\n\n### Iteration 1\n\n**Summary:** [ERROR] copilot returned no agent message\n\n\n",
+  "gnhfEvents": [
+    "run:start",
+    "orchestrator:start",
+    "iteration:start",
+    "agent:run:start",
+    "agent:run:error",
+    "iteration:end",
+    "orchestrator:abort",
+    "orchestrator:end",
+    "run:complete"
+  ]
+}

@@ -1,0 +1,44 @@
+[
+  {
+    "flag": "--continue",
+    "code": 1,
+    "stderr": "\n  gnhf: Invalid config value for agentArgsOverride.copilot[0]: \"--continue\" is managed by gnhf and cannot be overridden\n\n",
+    "stdout": "",
+    "ok": true
+  },
+  {
+    "flag": "--resume",
+    "code": 1,
+    "stderr": "\n  gnhf: Invalid config value for agentArgsOverride.copilot[0]: \"--resume\" is managed by gnhf and cannot be overridden\n\n",
+    "stdout": "",
+    "ok": true
+  },
+  {
+    "flag": "--resume=0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+    "code": 1,
+    "stderr": "\n  gnhf: Invalid config value for agentArgsOverride.copilot[0]: \"--resume=0cb916db-26aa-40f2-86b5-1ba81b225fd2\" is managed by gnhf and cannot be overridden\n\n",
+    "stdout": "",
+    "ok": true
+  },
+  {
+    "flag": "-r",
+    "code": 1,
+    "stderr": "\n  gnhf: Invalid config value for agentArgsOverride.copilot[0]: \"-r\" is managed by gnhf and cannot be overridden\n\n",
+    "stdout": "",
+    "ok": true
+  },
+  {
+    "flag": "--session-id",
+    "code": 1,
+    "stderr": "\n  gnhf: Invalid config value for agentArgsOverride.copilot[0]: \"--session-id\" is managed by gnhf and cannot be overridden\n\n",
+    "stdout": "",
+    "ok": true
+  },
+  {
+    "flag": "--session-id=0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+    "code": 1,
+    "stderr": "\n  gnhf: Invalid config value for agentArgsOverride.copilot[0]: \"--session-id=0cb916db-26aa-40f2-86b5-1ba81b225fd2\" is managed by gnhf and cannot be overridden\n\n",
+    "stdout": "",
+    "ok": true
+  }
+]
