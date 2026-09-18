@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>gnhf TUI live log unfold</title>
+  <style>
+:root { color-scheme: dark; }
+body {
+  margin: 0;
+  background: #0b0d12;
+  color: #d7dde8;
+  font-family: "Liberation Sans", "Noto Sans", sans-serif;
+}
+main { max-width: 980px; margin: 0 auto; padding: 28px 20px 48px; }
+h1 { font-size: 22px; margin: 0 0 8px; }
+.sub { color: #8b95a8; margin: 0 0 28px; }
+section { margin: 0 0 36px; }
+h2 { font-size: 16px; margin: 0 0 6px; }
+.meta { color: #8b95a8; font-size: 13px; margin: 0 0 12px; }
+.term {
+  background: #11141c;
+  border: 1px solid #2a3140;
+  border-radius: 10px;
+  padding: 14px 12px;
+  overflow: auto;
+}
+pre {
+  margin: 0;
+  font: 13px/1.35 "Liberation Mono", "Noto Sans Mono", monospace;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+  white-space: pre;
+  color: #e8eef7;
+}
+</style>
+</head>
+<body>
+  <main>
+    <h1>gnhf TUI live log unfold</h1>
+    <p class="sub">Live frames from the running product: default three-line fold, Ctrl+O unfold, Escape fold, Ctrl+C still stops, and a 24-row clamp when lastMessage is long enough to overflow.</p>
+    <section><h2>Default folded TUI (80x40)</h2><p class="meta">gnhf --mock · live-40x80-folded.txt</p><div class="term"><pre>                  ·          ·            ·   ·               ·                 
+                                           ··    ·             ·                
+                      ·                                                         
+                                                                                
+           ·                      ·                                       ··    
+                                                                                
+                             ·                       ·           ·              
+                                                                        ·       
+·                            g n h f  ·  c o d e x                              
+                                                                                
+                                                                                
+            ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻          °  
+            ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫             
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹             
+                                                                                
+           let&#x27;s minimize app startup latency without sacrificing any           
+                                 functionality                                  
+     ⋆·                                                                         
+                                                                        ⋆       
+                                                                                
+           08:07:17 · 88.2M total · 87.3M in · 860K out · 11 commits     °      
+                                                                                
+                                                                          ⋆     
+            Reading src/bootstrap.ts to trace the module init order             
+                                                                                
+                                                                               ·
+                                                                        ·       
+                                                                                
+   ·   ·                  🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌔                          
+                                                                                
+                                                                                
+                    ·          ·                     ·                          
+            ·                                                               ·   
+                        ·                              ·                        
+                       ·                  ·                       ·           ·⋆
+                             ·                                                  
+             ·                                                                  
+                                                                                
+            [ctrl+o to expand, ctrl+c to stop, gnhf again to resume]            
+                                                                                </pre></div></section><section><h2>Ctrl+O unfolded TUI (80x40)</h2><p class="meta">gnhf --mock · live-40x80-unfolded.txt</p><div class="term"><pre>                  ·          ·            ·   ·               ·                 
+                                           ··    ·             ·                
+                      ·                                                         
+                                                                                
+           ·                      ·                                       ··    
+                                                                                
+                             ·                       ·           ·              
+                                                                        ·       
+·                            g n h f  ·  c o d e x                              
+                                                                                
+                                                                                
+            ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻          °  
+            ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫             
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹             
+                                                                                
+           let&#x27;s minimize app startup latency without sacrificing any           
+                                 functionality                                  
+     ⋆·                                                                         
+                                                                        ⋆       
+                                                                                
+           08:07:17 · 88.2M total · 87.3M in · 860K out · 11 commits     °      
+                                                                                
+                                                                          ⋆     
+            Reading src/bootstrap.ts to trace the module init order             
+                                                                                
+                                                                               ·
+                                                                        ·       
+                                                                                
+   ·   ·                  🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌖                          
+                                                                                
+                                                                                
+                    ·          ·                     ·                          
+            ·                                                               ·   
+                        ·                              ·                        
+                       ·                  ·                       ·           ·⋆
+                             ·                                                  
+             ·                                                                  
+                                                                                
+         [ctrl+o or esc to fold, ctrl+c to stop, gnhf again to resume]          
+                                                                                </pre></div></section><section><h2>Escape folds the log again (80x40)</h2><p class="meta">gnhf --mock · live-40x80-folded-esc.txt</p><div class="term"><pre>                  ·          ·            ·   ·               ·                 
+                                           ··    ·             ·                
+                      ·                                                         
+                                                                                
+           ·                      ·                                       ··    
+                                                                                
+                             ·                       ·           ·              
+                                                                        ·       
+·                            g n h f  ·  c o d e x                              
+                                                                                
+                                                                                
+            ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻          °  
+            ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫             
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹             
+                                                                                
+           let&#x27;s minimize app startup latency without sacrificing any           
+                                 functionality                                  
+     ⋆·                                                                         
+                                                                        ⋆       
+                                                                                
+           08:07:18 · 88.2M total · 87.3M in · 860K out · 11 commits     °      
+                                                                                
+                                                                          ⋆     
+            Reading src/bootstrap.ts to trace the module init order             
+                                                                                
+                                                                               ·
+                                                                        ·       
+                                                                                
+   ·   ·                  🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌗                          
+                                                                                
+                                                                                
+                    ·          ·                     ·                          
+            ·                                                               ·   
+                        ·                              ·                        
+                       ·                  ·                       ·           ·⋆
+                             ·                                                  
+             ·                                                                  
+                                                                                
+            [ctrl+o to expand, ctrl+c to stop, gnhf again to resume]            
+                                                                                </pre></div></section><section><h2>Ctrl+C still requests graceful stop while unfolded</h2><p class="meta">gnhf --mock · live-40x80-unfolded-ctrl-c.txt</p><div class="term"><pre>                  ·          ·            ·   ·               ·                 
+                                           ··    ·             ·                
+                      ·                                                         
+                                                                                
+           ·                      ·                                       ··    
+                                                                                
+                             ·                       ·           ·              
+                                                                        ·       
+·                            g n h f  ·  c o d e x                              
+                                                                                
+                                                                                
+            ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻          °  
+            ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫             
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹             
+                                                                                
+           let&#x27;s minimize app startup latency without sacrificing any           
+                                 functionality                                  
+     ⋆·                                                                         
+                                                                        ⋆       
+                                                                           °    
+           08:07:19 · 88.2M total · 87.3M in · 860K out · 11 commits     °      
+                                                                                
+                                                                          ⋆     
+            Reading src/bootstrap.ts to trace the module init order             
+                                                                                
+                                                                               ·
+                                                                        ·       
+                                                                                
+   ·   ·                  🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌖                          
+                                                                                
+                                                                                
+                    ·          ·                     ·                          
+            ·                                                               ·   
+                        ·                              ·                        
+                       ·                  ·                       ·           ·⋆
+                             ·                                                  
+             ·                                                                  
+                                                                                
+  [graceful stop requested, ctrl+c again to force stop, gnhf again to resume]   
+                                                                                </pre></div></section><section><h2>Folded TUI on a 24-row terminal</h2><p class="meta">gnhf --mock · live-24x80-folded.txt</p><div class="term"><pre>                                                                                
+                             g n h f  ·  c o d e x                              
+                                                                        °       
+                                                                        °       
+            ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻             
+            ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫        °    
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹             
+   ⋆                                                                            
+           let&#x27;s minimize app startup latency without sacrificing any           
+                                 functionality                                  
+                                                                                
+                                                                         ·      
+ ✧                                                                              
+           08:07:17 · 88.2M total · 87.3M in · 860K out · 11 commits            
+       ·                                                                    ·   
+                                                                            ·  ⋆
+            Reading src/bootstrap.ts to trace the module init order             
+                                                                          ⋆     
+                                                                                
+                                                                                
+                                                                                
+°                         🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌓                          
+            [ctrl+o to expand, ctrl+c to stop, gnhf again to resume]            
+                                                                                </pre></div></section><section><h2>Unfolded TUI on a 24-row terminal</h2><p class="meta">gnhf --mock · live-24x80-unfolded.txt</p><div class="term"><pre>                                                                                
+                             g n h f  ·  c o d e x                              
+                                                                        °       
+                                                                        °       
+            ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻             
+            ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫        °    
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹             
+   ⋆                                                                            
+           let&#x27;s minimize app startup latency without sacrificing any           
+                                 functionality                                  
+                                                                                
+                                                                         ·      
+ ✧                                                                              
+           08:07:17 · 88.2M total · 87.3M in · 860K out · 11 commits            
+       ·                                                                    ·   
+                                                                               ⋆
+            Reading src/bootstrap.ts to trace the module init order             
+                                                                          ⋆     
+                                                                                
+                                                                                
+                                                                                
+°                         🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌕                          
+         [ctrl+o or esc to fold, ctrl+c to stop, gnhf again to resume]          
+                                                                                </pre></div></section><section><h2>Folded 30-line lastMessage on 24 rows</h2><p class="meta">Renderer TUI · live-24x80-long-folded.txt</p><div class="term"><pre>
+                            g n h f  ·  c l a u d e
+
+
+            ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻
+            ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹
+
+                                 overflow probe                         ··
+    ⋆
+
+                                                                          °
+
+               497158:12:42 · 0 total · 0 in · 0 out · 0 commits
+
+
+                                 Message line 1                               ⋆
+                                 Message line 2
+✧                               Message line 3…                          ⋆
+    ·
+
+                                       🌕
+            [ctrl+o to expand, ctrl+c to stop, gnhf again to resume]</pre></div></section><section><h2>Unfolded 30-line lastMessage stays 24 rows</h2><p class="meta">Renderer TUI · live-24x80-long-unfolded.txt</p><div class="term"><pre>               497158:12:42 · 0 total · 0 in · 0 out · 0 commits
+                                 Message line 1
+                                 Message line 2
+                                 Message line 3
+                                 Message line 4
+                                 Message line 5
+                                 Message line 6
+                                 Message line 7
+                                 Message line 8                         ··
+    ⋆                            Message line 9
+                                Message line 10
+                                Message line 11                           °
+                                Message line 12
+                                Message line 13
+                                Message line 14
+                                Message line 15
+                                Message line 16
+                                Message line 17
+✧                               Message line 18                          ⋆
+    ·                           Message line 19
+                                Message line 20
+                                Message line 21…
+         [ctrl+o or esc to fold, ctrl+c to stop, gnhf again to resume]</pre></div></section>
+  </main>
+</body>
+</html>

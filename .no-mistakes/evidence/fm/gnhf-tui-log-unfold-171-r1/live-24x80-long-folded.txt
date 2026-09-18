@@ -1,0 +1,24 @@
+
+                            g n h f  ·  c l a u d e
+
+
+            ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻
+            ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫
+            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹
+
+                                 overflow probe                         ··
+    ⋆
+
+                                                                          °
+
+               497158:12:42 · 0 total · 0 in · 0 out · 0 commits
+
+
+                                 Message line 1                               ⋆
+                                 Message line 2
+✧                               Message line 3…                          ⋆
+    ·
+
+                                       🌕
+            [ctrl+o to expand, ctrl+c to stop, gnhf again to resume]
+

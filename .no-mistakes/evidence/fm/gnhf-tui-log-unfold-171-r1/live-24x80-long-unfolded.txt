@@ -1,0 +1,24 @@
+               497158:12:42 · 0 total · 0 in · 0 out · 0 commits
+                                 Message line 1
+                                 Message line 2
+                                 Message line 3
+                                 Message line 4
+                                 Message line 5
+                                 Message line 6
+                                 Message line 7
+                                 Message line 8                         ··
+    ⋆                            Message line 9
+                                Message line 10
+                                Message line 11                           °
+                                Message line 12
+                                Message line 13
+                                Message line 14
+                                Message line 15
+                                Message line 16
+                                Message line 17
+✧                               Message line 18                          ⋆
+    ·                           Message line 19
+                                Message line 20
+                                Message line 21…
+         [ctrl+o or esc to fold, ctrl+c to stop, gnhf again to resume]
+

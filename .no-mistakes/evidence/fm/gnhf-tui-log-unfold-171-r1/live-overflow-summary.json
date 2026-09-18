@@ -1,0 +1,28 @@
+{
+  "folded": {
+    "name": "live-24x80-long-folded",
+    "captured_lines": 24,
+    "has_expand_hint": true,
+    "has_fold_hint": false,
+    "has_line_1": true,
+    "has_line_4": false,
+    "has_line_20": false,
+    "has_line_30": false,
+    "has_ellipsis": true,
+    "has_stats": true,
+    "footer_line": 23
+  },
+  "unfolded": {
+    "name": "live-24x80-long-unfolded",
+    "captured_lines": 24,
+    "has_expand_hint": false,
+    "has_fold_hint": true,
+    "has_line_1": true,
+    "has_line_4": true,
+    "has_line_20": true,
+    "has_line_30": false,
+    "has_ellipsis": true,
+    "has_stats": true,
+    "footer_line": 23
+  }
+}

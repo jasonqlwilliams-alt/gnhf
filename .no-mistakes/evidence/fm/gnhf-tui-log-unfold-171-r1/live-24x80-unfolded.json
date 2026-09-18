@@ -1,0 +1,13 @@
+{
+  "name": "live-24x80-unfolded",
+  "pane": "80x24",
+  "captured_lines": 24,
+  "has_expand_hint": false,
+  "has_fold_hint": true,
+  "has_graceful_stop_hint": false,
+  "has_ellipsis": false,
+  "has_gnhf_logo": true,
+  "has_prompt": true,
+  "has_stats": true,
+  "footer_visible": true
+}

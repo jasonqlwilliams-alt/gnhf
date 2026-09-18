@@ -1,0 +1,98 @@
+{
+  "cli": "/home/jason/.no-mistakes/worktrees/81d474556c1c/01M2V8MP0QZD9XPSSRPEBN4WSB/dist/cli.mjs",
+  "large": {
+    "folded": {
+      "name": "live-40x80-folded",
+      "pane": "80x40",
+      "captured_lines": 40,
+      "has_expand_hint": true,
+      "has_fold_hint": false,
+      "has_graceful_stop_hint": false,
+      "has_ellipsis": false,
+      "has_gnhf_logo": true,
+      "has_prompt": true,
+      "has_stats": true,
+      "footer_visible": true
+    },
+    "unfolded": {
+      "name": "live-40x80-unfolded",
+      "pane": "80x40",
+      "captured_lines": 40,
+      "has_expand_hint": false,
+      "has_fold_hint": true,
+      "has_graceful_stop_hint": false,
+      "has_ellipsis": false,
+      "has_gnhf_logo": true,
+      "has_prompt": true,
+      "has_stats": true,
+      "footer_visible": true
+    },
+    "folded_esc": {
+      "name": "live-40x80-folded-esc",
+      "pane": "80x40",
+      "captured_lines": 40,
+      "has_expand_hint": true,
+      "has_fold_hint": false,
+      "has_graceful_stop_hint": false,
+      "has_ellipsis": false,
+      "has_gnhf_logo": true,
+      "has_prompt": true,
+      "has_stats": true,
+      "footer_visible": true
+    },
+    "folded_toggle": {
+      "name": "live-40x80-folded-toggle",
+      "pane": "80x40",
+      "captured_lines": 40,
+      "has_expand_hint": true,
+      "has_fold_hint": false,
+      "has_graceful_stop_hint": false,
+      "has_ellipsis": false,
+      "has_gnhf_logo": true,
+      "has_prompt": true,
+      "has_stats": true,
+      "footer_visible": true
+    },
+    "graceful": {
+      "name": "live-40x80-unfolded-ctrl-c",
+      "pane": "80x40",
+      "captured_lines": 40,
+      "has_expand_hint": false,
+      "has_fold_hint": false,
+      "has_graceful_stop_hint": true,
+      "has_ellipsis": false,
+      "has_gnhf_logo": true,
+      "has_prompt": true,
+      "has_stats": true,
+      "footer_visible": true
+    }
+  },
+  "tight": {
+    "folded": {
+      "name": "live-24x80-folded",
+      "pane": "80x24",
+      "captured_lines": 24,
+      "has_expand_hint": true,
+      "has_fold_hint": false,
+      "has_graceful_stop_hint": false,
+      "has_ellipsis": false,
+      "has_gnhf_logo": true,
+      "has_prompt": true,
+      "has_stats": true,
+      "footer_visible": true
+    },
+    "unfolded": {
+      "name": "live-24x80-unfolded",
+      "pane": "80x24",
+      "captured_lines": 24,
+      "has_expand_hint": false,
+      "has_fold_hint": true,
+      "has_graceful_stop_hint": false,
+      "has_ellipsis": false,
+      "has_gnhf_logo": true,
+      "has_prompt": true,
+      "has_stats": true,
+      "footer_visible": true
+    }
+  }
+}

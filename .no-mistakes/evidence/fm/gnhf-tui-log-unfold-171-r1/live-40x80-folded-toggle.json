@@ -1,0 +1,13 @@
+{
+  "name": "live-40x80-folded-toggle",
+  "pane": "80x40",
+  "captured_lines": 40,
+  "has_expand_hint": true,
+  "has_fold_hint": false,
+  "has_graceful_stop_hint": false,
+  "has_ellipsis": false,
+  "has_gnhf_logo": true,
+  "has_prompt": true,
+  "has_stats": true,
+  "footer_visible": true
+}
