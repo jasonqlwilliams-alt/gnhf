@@ -13,6 +13,10 @@ export function buildWindowsClaudePermissionArgs(
   execPath = process.execPath,
   scriptPath = process.argv[1] ?? fileURLToPath(import.meta.url),
 ): string[] {
+  // Resolve against this process cwd. Claude later starts the MCP server
+  // with cwd set to the agent working directory, which --worktree moves
+  // to a sibling checkout, so a relative argv[1] such as dist/cli.mjs
+  // would miss the real CLI. See claude-permission-prompt.test.ts.
   return [
     "--mcp-config",
     JSON.stringify({
