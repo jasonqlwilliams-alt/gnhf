@@ -555,7 +555,8 @@ function unfoldedMessageLineCap(availableHeight?: number): number {
   if (availableHeight == null || !Number.isFinite(availableHeight)) {
     return Number.POSITIVE_INFINITY;
   }
-  return Math.max(MAX_MSG_LINES, availableHeight);
+  const reservedStatsRows = 1;
+  return Math.max(MAX_MSG_LINES, availableHeight - reservedStatsRows);
 }
 
 export function buildContentCells(
@@ -653,7 +654,9 @@ export function buildContentCells(
       ...sections.prompt,
       ...sections.stats,
       ...sections.agent,
-    ].filter((row) => row.length > 0);
+    ]
+      .filter((row) => row.length > 0)
+      .slice(0, maxRows);
     const allowedMoonRows = Math.max(0, maxRows - nonMoonRows.length);
     const visibleMoonRows =
       allowedMoonRows === 0

@@ -913,6 +913,56 @@ describe("buildContentCells adaptive height", () => {
     expect(unfolded).not.toContain("\u2026");
   });
 
+  it("keeps an unfolded lastMessage within a 24-row terminal", () => {
+    const lastMessage = Array.from(
+      { length: 30 },
+      (_, index) => `Message line ${index + 1}`,
+    ).join("\n");
+    const unfoldedState = { ...state, lastMessage };
+    const terminalHeight = 24;
+    const availableHeight = terminalHeight - 2;
+
+    const contentRows = buildContentCells(
+      "my prompt",
+      "claude",
+      unfoldedState,
+      "00:01:00",
+      0,
+      availableHeight,
+      undefined,
+      true,
+    );
+    const contentText = toText(contentRows);
+
+    expect(contentRows.length).toBeLessThanOrEqual(availableHeight);
+    expect(contentText).toContain("00:01:00");
+    expect(contentText).toContain("Message line 1");
+    expect(contentText).toContain("Message line 20");
+    expect(contentText).not.toContain("Message line 30");
+
+    const frame = buildFrameCells(
+      "my prompt",
+      "claude",
+      unfoldedState,
+      [],
+      [],
+      [],
+      0,
+      80,
+      terminalHeight,
+      [],
+      [],
+      [],
+      true,
+    );
+    const frameText = frame.map(rowToString).map(stripAnsi).join("\n");
+
+    expect(frame).toHaveLength(terminalHeight);
+    expect(frameText).toContain("ctrl+o or esc to fold");
+    expect(frameText).toContain("Message line 1");
+    expect(frameText).not.toContain("Message line 30");
+  });
+
   it("keeps the logo separated from both the eyebrow and prompt", () => {
     const lines = buildContentCells("my prompt", "claude", state, "00:01:00", 0)
       .map(rowToString)
