@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { EventEmitter } from "node:events";
+import { resolve } from "node:path";
 
 vi.mock("node:child_process", () => ({
   execFileSync: vi.fn(),
@@ -51,7 +52,7 @@ function expectWindowsClaudePermissionDefaults(args: string[]) {
   };
   expect(config.mcpServers[CLAUDE_PERMISSION_MCP_SERVER_NAME]).toEqual({
     command: process.execPath,
-    args: [process.argv[1], CLAUDE_PERMISSION_PROMPT_FLAG],
+    args: [resolve(process.argv[1]!), CLAUDE_PERMISSION_PROMPT_FLAG],
   });
 }
 

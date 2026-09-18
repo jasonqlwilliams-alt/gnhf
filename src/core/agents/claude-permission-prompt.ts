@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { decideClaudeToolPermission } from "./host-wide-node-kill.js";
 
@@ -18,7 +19,7 @@ export function buildWindowsClaudePermissionArgs(
       mcpServers: {
         [CLAUDE_PERMISSION_MCP_SERVER_NAME]: {
           command: execPath,
-          args: [scriptPath, CLAUDE_PERMISSION_PROMPT_FLAG],
+          args: [resolve(scriptPath), CLAUDE_PERMISSION_PROMPT_FLAG],
         },
       },
     }),

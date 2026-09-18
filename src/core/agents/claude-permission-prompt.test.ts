@@ -1,12 +1,40 @@
+import { isAbsolute, resolve } from "node:path";
 import { Readable, Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import {
+  CLAUDE_PERMISSION_MCP_SERVER_NAME,
   CLAUDE_PERMISSION_MCP_TOOL_NAME,
+  CLAUDE_PERMISSION_PROMPT_FLAG,
   CLAUDE_PERMISSION_PROMPT_TOOL,
+  buildWindowsClaudePermissionArgs,
   encodeMcpMessage,
   handleClaudePermissionMcpRequest,
   runClaudePermissionPromptMcp,
 } from "./claude-permission-prompt.js";
+
+describe("buildWindowsClaudePermissionArgs", () => {
+  it("resolves a relative CLI script so Claude's worktree cwd cannot miss it", () => {
+    const args = buildWindowsClaudePermissionArgs(
+      process.execPath,
+      "dist/cli.mjs",
+    );
+    expect(args[0]).toBe("--mcp-config");
+    const config = JSON.parse(args[1]!) as {
+      mcpServers: Record<string, { command: string; args: string[] }>;
+    };
+    const server = config.mcpServers[CLAUDE_PERMISSION_MCP_SERVER_NAME];
+    expect(server?.command).toBe(process.execPath);
+    expect(isAbsolute(server?.args[0]!)).toBe(true);
+    expect(server?.args).toEqual([
+      resolve("dist/cli.mjs"),
+      CLAUDE_PERMISSION_PROMPT_FLAG,
+    ]);
+    expect(args.slice(2)).toEqual([
+      "--permission-prompt-tool",
+      CLAUDE_PERMISSION_PROMPT_TOOL,
+    ]);
+  });
+});
 
 describe("handleClaudePermissionMcpRequest", () => {
   it("advertises the permission prompt tool on initialize", () => {
