@@ -13,6 +13,7 @@ export const AGENT_NAMES = [
   "opencode",
   "copilot",
   "pi",
+  "cursor",
 ] as const;
 
 export type AgentName = (typeof AGENT_NAMES)[number];
@@ -73,6 +74,7 @@ export function redactAgentSpecForLogs(spec: string): string {
 
 export interface Config {
   agent: AgentSpec;
+  agentModel: Partial<Record<AgentName, string>>;
   agentPathOverride: Partial<Record<AgentName, string>>;
   agentArgsOverride: Partial<Record<AgentName, string[]>>;
   acpRegistryOverrides: Record<string, string>;
@@ -83,6 +85,7 @@ export interface Config {
 
 const DEFAULT_CONFIG: Config = {
   agent: "claude",
+  agentModel: {},
   agentPathOverride: {},
   agentArgsOverride: {},
   acpRegistryOverrides: {},
@@ -106,6 +109,20 @@ function normalizePreventSleep(value: unknown): boolean | undefined {
   if (value === "on") return true;
   if (value === "off") return false;
   return undefined;
+}
+
+function isOpencodeModelArg(arg: string): boolean {
+  return (
+    arg === "--model" ||
+    arg.startsWith("--model=") ||
+    arg === "-m" ||
+    arg.startsWith("-m=")
+  );
+}
+
+function isOpenCodeModel(model: string): boolean {
+  const slashIndex = model.indexOf("/");
+  return slashIndex > 0 && slashIndex < model.length - 1;
 }
 
 function isReservedAgentArg(agent: AgentName, arg: string): boolean {
@@ -188,6 +205,27 @@ function isReservedAgentArg(agent: AgentName, arg: string): boolean {
         arg === "-h" ||
         arg === "--version" ||
         arg === "-v" ||
+        arg === "--api-key" ||
+        arg.startsWith("--api-key=")
+      );
+    case "cursor":
+      return (
+        arg === "-p" ||
+        arg === "--print" ||
+        arg === "--output-format" ||
+        arg.startsWith("--output-format=") ||
+        arg === "--stream-partial-output" ||
+        arg === "--workspace" ||
+        arg.startsWith("--workspace=") ||
+        arg === "--resume" ||
+        arg.startsWith("--resume=") ||
+        arg === "--continue" ||
+        arg === "-w" ||
+        arg === "--worktree" ||
+        arg.startsWith("--worktree=") ||
+        arg === "--worktree-base" ||
+        arg.startsWith("--worktree-base=") ||
+        arg === "--skip-worktree-setup" ||
         arg === "--api-key" ||
         arg.startsWith("--api-key=")
       );
@@ -284,6 +322,12 @@ function normalizeAgentExtraArgs(
       );
     }
 
+    if (agent === "opencode" && isOpencodeModelArg(trimmed)) {
+      throw new InvalidConfigError(
+        `Invalid config value for ${label}[${index}]: "${trimmed}" sets the model, which gnhf sends in the opencode request body. Use --model or agentModel.opencode instead.`,
+      );
+    }
+
     if (isReservedAgentArg(agent, trimmed)) {
       throw new InvalidConfigError(
         `Invalid config value for ${label}[${index}]: "${trimmed}" is managed by gnhf and cannot be overridden`,
@@ -323,6 +367,53 @@ function normalizeAgentArgsOverride(
     if (args !== undefined) {
       result[key as AgentName] = args;
     }
+  }
+
+  return Object.keys(result).length === 0 ? undefined : result;
+}
+
+function normalizeAgentModel(
+  value: unknown,
+): Partial<Record<AgentName, string>> | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new InvalidConfigError(
+      `Invalid config value for agentModel: expected an object mapping agent names to models`,
+    );
+  }
+
+  const validNames = new Set<string>(AGENT_NAMES);
+  const result: Partial<Record<AgentName, string>> = {};
+
+  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    if (!validNames.has(key)) {
+      throw new InvalidConfigError(
+        `Invalid agent name in agentModel: "${key}". Use ${formatAgentNameList()}.`,
+      );
+    }
+    if (typeof val !== "string") {
+      throw new InvalidConfigError(
+        `Invalid model for agentModel.${key}: expected a string`,
+      );
+    }
+    if (val.trim() === "") {
+      throw new InvalidConfigError(
+        `Invalid model for agentModel.${key}: expected a non-empty string`,
+      );
+    }
+    const agent = key as AgentName;
+    const model = val.trim();
+    if (agent === "opencode" && !isOpenCodeModel(model)) {
+      throw new InvalidConfigError(
+        "Invalid model for agentModel.opencode: expected provider/model",
+      );
+    }
+    if (agent === "rovodev") {
+      throw new InvalidConfigError(
+        "Invalid model for agentModel.rovodev: configure agent.modelId in Rovo Dev settings instead",
+      );
+    }
+    result[agent] = model;
   }
 
   return Object.keys(result).length === 0 ? undefined : result;
@@ -419,6 +510,21 @@ function normalizeConfig(
     delete normalized.agentArgsOverride;
   }
 
+  const hasAgentModel = Object.prototype.hasOwnProperty.call(
+    config,
+    "agentModel",
+  );
+  if (hasAgentModel) {
+    const agentModel = normalizeAgentModel(config.agentModel);
+    if (agentModel === undefined) {
+      delete normalized.agentModel;
+    } else {
+      normalized.agentModel = agentModel;
+    }
+  } else {
+    delete normalized.agentModel;
+  }
+
   const hasAcpRegistryOverrides = Object.prototype.hasOwnProperty.call(
     config,
     "acpRegistryOverrides",
@@ -498,6 +604,18 @@ function serializeAgentArgsOverride(
     .trimEnd();
 }
 
+function serializeAgentModel(
+  agentModel: Partial<Record<AgentName, string>>,
+): string {
+  if (Object.keys(agentModel).length === 0) {
+    return "";
+  }
+
+  return yaml
+    .dump({ agentModel }, { lineWidth: -1, noRefs: true, sortKeys: false })
+    .trimEnd();
+}
+
 function serializeAgent(agent: AgentSpec): string {
   return yaml
     .dump({ agent }, { lineWidth: -1, noRefs: true, sortKeys: false })
@@ -511,6 +629,7 @@ function serializeConfig(config: Config): string {
   const agentArgsOverrideSection = serializeAgentArgsOverride(
     config.agentArgsOverride,
   );
+  const agentModelSection = serializeAgentModel(config.agentModel);
   const lines = [
     "# Agent to use by default: native agent name or acp:<target-or-command>",
     serializeAgent(config.agent),
@@ -524,6 +643,7 @@ function serializeConfig(config: Config): string {
     "#   codex: /path/to/custom-codex",
     "#   copilot: /path/to/custom-copilot",
     "#   pi: /path/to/custom-pi",
+    "#   cursor: /path/to/custom-cursor-agent",
     "",
     "# Native agent CLI arg overrides (optional)",
     "# ACP targets do not support path or arg overrides.",
@@ -544,6 +664,17 @@ function serializeConfig(config: Config): string {
     "#     - gpt-5.5",
     "#     - --thinking",
     "#     - high",
+    "#   cursor:",
+    "#     - --model",
+    "#     - composer-2.5",
+    "",
+    "# Models for supported native agents (optional)",
+    "# Values are forwarded to the CLI except opencode, which receives",
+    "# its model in the request body.",
+    "# agentModel:",
+    "#   claude: sonnet",
+    "#   codex: gpt-5.4",
+    "#   opencode: fireworks-ai/accounts/fireworks/models/qwen3p6-plus",
     "",
     "# Custom ACP target commands (optional)",
     "# Maps acp:<target> names to spawn commands. Useful for naming a",
@@ -565,6 +696,10 @@ function serializeConfig(config: Config): string {
 
   if (agentArgsOverrideSection) {
     lines.push(...agentArgsOverrideSection.split("\n"));
+  }
+
+  if (agentModelSection) {
+    lines.push(...agentModelSection.split("\n"));
   }
 
   lines.push(

@@ -10,6 +10,7 @@ import { AcpAgent } from "./acp.js";
 import { ClaudeAgent } from "./claude.js";
 import { CopilotAgent } from "./copilot.js";
 import { CodexAgent } from "./codex.js";
+import { CursorAgent } from "./cursor.js";
 import { OpenCodeAgent } from "./opencode.js";
 import { PiAgent } from "./pi.js";
 import { RovoDevAgent } from "./rovodev.js";
@@ -18,6 +19,7 @@ export interface CreateAgentOptions {
   includeStopField: boolean;
   commitFields?: AgentOutputCommitField[];
   acpRegistryOverrides?: Record<string, string>;
+  model?: string;
 }
 
 export function createAgent(
@@ -48,29 +50,41 @@ export function createAgent(
       return new ClaudeAgent({
         bin: pathOverride,
         extraArgs: agentArgsOverride,
+        model: options.model,
         schema,
       });
     case "codex":
       return new CodexAgent(runInfo.schemaPath, {
         bin: pathOverride,
         extraArgs: agentArgsOverride,
+        model: options.model,
       });
     case "copilot":
       return new CopilotAgent({
         bin: pathOverride,
         extraArgs: agentArgsOverride,
+        model: options.model,
         schema,
       });
     case "opencode":
       return new OpenCodeAgent({
         bin: pathOverride,
         extraArgs: agentArgsOverride,
+        model: options.model,
         schema,
       });
     case "pi":
       return new PiAgent({
         bin: pathOverride,
         extraArgs: agentArgsOverride,
+        model: options.model,
+        schema,
+      });
+    case "cursor":
+      return new CursorAgent({
+        bin: pathOverride,
+        extraArgs: agentArgsOverride,
+        model: options.model,
         schema,
       });
     case "rovodev":

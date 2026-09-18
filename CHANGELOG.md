@@ -1,5 +1,66 @@
 # Changelog
 
+## [0.1.49](https://github.com/kunchenguid/gnhf/compare/gnhf-v0.1.48...gnhf-v0.1.49) (2026-09-04)
+
+
+### Features
+
+* **cli:** support per-agent model selection ([#225](https://github.com/kunchenguid/gnhf/issues/225)) ([33d89fb](https://github.com/kunchenguid/gnhf/commit/33d89fb54795c8d88512e833d50c7e18f01c1eda))
+
+
+### Bug Fixes
+
+* **claude:** surface limit failure state ([#223](https://github.com/kunchenguid/gnhf/issues/223)) ([693f1d5](https://github.com/kunchenguid/gnhf/commit/693f1d564a31fa419c0c0989aad8fb89a48578df))
+
+## [0.1.48](https://github.com/kunchenguid/gnhf/compare/gnhf-v0.1.47...gnhf-v0.1.48) (2026-09-01)
+
+
+### Bug Fixes
+
+* **core:** wait for the usage window instead of billing extra usage ([#221](https://github.com/kunchenguid/gnhf/issues/221)) ([1689ace](https://github.com/kunchenguid/gnhf/commit/1689ace19d91db7636a6eef1a8b385495858826d))
+
+## [0.1.47](https://github.com/kunchenguid/gnhf/compare/gnhf-v0.1.46...gnhf-v0.1.47) (2026-08-30)
+
+
+### Bug Fixes
+
+* **core:** honor pending token abort before success ([#217](https://github.com/kunchenguid/gnhf/issues/217)) ([bf2edd9](https://github.com/kunchenguid/gnhf/commit/bf2edd9aaf89d5cf8085f176edeb9032d0ad3dd6))
+
+## [0.1.46](https://github.com/kunchenguid/gnhf/compare/gnhf-v0.1.45...gnhf-v0.1.46) (2026-08-28)
+
+
+### Bug Fixes
+
+* **core:** count cache tokens toward the --max-tokens budget ([#213](https://github.com/kunchenguid/gnhf/issues/213)) ([73b9ed7](https://github.com/kunchenguid/gnhf/commit/73b9ed7039a0ee214c4d3549af6ae8b249d07e4b))
+
+## [0.1.45](https://github.com/kunchenguid/gnhf/compare/gnhf-v0.1.44...gnhf-v0.1.45) (2026-08-21)
+
+
+### Features
+
+* **core:** wait for Claude usage-limit reset instead of aborting on rate limits ([#179](https://github.com/kunchenguid/gnhf/issues/179)) ([2e1dd13](https://github.com/kunchenguid/gnhf/commit/2e1dd137e968f3ec81e85ff6b45db8033667e0eb))
+
+
+### Bug Fixes
+
+* **agents:** surface shared CLI stdout errors ([#202](https://github.com/kunchenguid/gnhf/issues/202)) ([5cc31af](https://github.com/kunchenguid/gnhf/commit/5cc31afd89668ec653d60fd11418625db4d7c5b4))
+* **cli:** keep worktrees across Linux sleep re-exec ([1c2344f](https://github.com/kunchenguid/gnhf/commit/1c2344f0cffb4f34fe5d903ed208abd2a64b3f88))
+* **cli:** preserve committed worktrees on forced shutdown ([#189](https://github.com/kunchenguid/gnhf/issues/189)) ([c12cdbf](https://github.com/kunchenguid/gnhf/commit/c12cdbf5834d1b285954f8760ad2400977a57a78))
+* **core:** make Windows sleep prevention hold the machine awake ([#209](https://github.com/kunchenguid/gnhf/issues/209)) ([b50209a](https://github.com/kunchenguid/gnhf/commit/b50209ae25374034c164ebde66859a32398c1048))
+
+## [0.1.44](https://github.com/kunchenguid/gnhf/compare/gnhf-v0.1.43...gnhf-v0.1.44) (2026-08-13)
+
+
+### Features
+
+* **agents:** add native Cursor CLI support ([#203](https://github.com/kunchenguid/gnhf/issues/203)) ([06ae1cf](https://github.com/kunchenguid/gnhf/commit/06ae1cf025704fe3ca669983b0a68b8dbb99c23b))
+
+
+### Bug Fixes
+
+* **agents:** recover wrapped Pi JSON output ([#195](https://github.com/kunchenguid/gnhf/issues/195)) ([f47d916](https://github.com/kunchenguid/gnhf/commit/f47d916fd3d98d6784305fca3931c77c6e068121))
+* **agents:** surface Claude CLI exit errors ([#190](https://github.com/kunchenguid/gnhf/issues/190)) ([3041614](https://github.com/kunchenguid/gnhf/commit/3041614ba7f45fc758eb156716a1343942b4a052))
+
 ## [0.1.43](https://github.com/kunchenguid/gnhf/compare/gnhf-v0.1.42...gnhf-v0.1.43) (2026-07-23)
 
 

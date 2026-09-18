@@ -8,9 +8,11 @@ import {
 
 function createMockChild() {
   const child = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter;
     stderr: EventEmitter;
     kill: ReturnType<typeof vi.fn>;
   };
+  child.stdout = new EventEmitter();
   child.stderr = new EventEmitter();
   child.kill = vi.fn();
   return child;
@@ -90,6 +92,35 @@ describe("setupChildProcessHandlers", () => {
     expect(onSuccess).not.toHaveBeenCalled();
     expect(reject).toHaveBeenCalledWith(
       new Error("codex exited with code 2: boom"),
+    );
+  });
+
+  it("rejects with a structured stdout error when stderr is empty", () => {
+    const child = createMockChild();
+    const reject = vi.fn();
+
+    setupChildProcessHandlers(child as never, "codex", null, reject, vi.fn());
+
+    child.stdout.emit(
+      "data",
+      Buffer.from('{"type":"error","error":{"message":"login required"}}\n'),
+    );
+    child.emit("close", 1);
+
+    expect(reject).toHaveBeenCalledWith(
+      new Error("codex exited with code 1: login required"),
+    );
+  });
+
+  it("says so when a non-zero exit produced no output", () => {
+    const child = createMockChild();
+    const reject = vi.fn();
+
+    setupChildProcessHandlers(child as never, "pi", null, reject, vi.fn());
+    child.emit("close", 1);
+
+    expect(reject).toHaveBeenCalledWith(
+      new Error("pi exited with code 1 and produced no output"),
     );
   });
 

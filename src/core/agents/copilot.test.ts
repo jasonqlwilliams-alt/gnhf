@@ -115,6 +115,19 @@ describe("CopilotAgent", () => {
     expect(args).not.toContain("--allow-all");
   });
 
+  it("adds the configured model before the prompt flag", () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new CopilotAgent({
+      model: "gpt-5.4",
+    });
+
+    agent.run("test prompt", "/work/dir");
+
+    const args = mockSpawn.mock.calls[0]![1] as string[];
+    expect(args.slice(0, 3)).toEqual(["--model", "gpt-5.4", "-p"]);
+  });
+
   it("kills the full process tree on Windows when aborted", async () => {
     const proc = createMockProcess();
     Object.defineProperty(proc, "pid", { value: 6789 });
@@ -331,5 +344,19 @@ describe("CopilotAgent", () => {
     proc.emit("close", 0);
 
     await expect(promise).rejects.toThrow("Failed to parse copilot output");
+  });
+
+  it("surfaces a structured error emitted on stdout after a non-zero exit", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const agent = new CopilotAgent();
+
+    const promise = agent.run("test prompt", "/work/dir");
+    emitJson(proc, { type: "error", error: { message: "login required" } });
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toThrow(
+      "copilot exited with code 1: login required",
+    );
   });
 });

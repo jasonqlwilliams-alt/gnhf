@@ -465,6 +465,89 @@ describe("gnhf e2e", () => {
     30_000,
   );
 
+  it("keeps going through extra usage when the reported reset time has already elapsed", async () => {
+    const cwd = createRepo();
+    tempDirs.push(cwd);
+    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    tempDirs.push(logDir);
+    const mockLogPath = join(logDir, "mock-opencode.jsonl");
+
+    const result = await runCli(
+      cwd,
+      [
+        "ship it",
+        "--agent",
+        "claude",
+        "--max-iterations",
+        "3",
+        "--prevent-sleep",
+        "off",
+      ],
+      {
+        env: {
+          ...createTestEnv(mockLogPath, tempDirs),
+          GNHF_MOCK_CLAUDE_MODE: "overage-elapsed-reset",
+        },
+      },
+    );
+
+    expect(result.code).toBe(0);
+    // An elapsed reset instant is the provider saying the included window is
+    // back, so the run neither pauses nor stops early.
+    expect(result.stdout).toContain("max iterations reached (3)");
+    expect(result.stdout).not.toContain("extra usage engaged");
+    expect(git(["rev-list", "--count", "HEAD"], cwd)).toBe("4");
+
+    const debugEvents = readJsonLines(findRunLogPath(cwd)).map(
+      (entry) => entry.event,
+    );
+    expect(debugEvents).toContain("overage:window-returned");
+    expect(debugEvents).not.toContain("overage:wait:start");
+    expect(debugEvents).not.toContain("overage:wait:unusable-reset");
+  }, 60_000);
+
+  it("stops and names extra usage in the exit summary when no reset time is reported", async () => {
+    const cwd = createRepo();
+    tempDirs.push(cwd);
+    const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+    tempDirs.push(logDir);
+    const mockLogPath = join(logDir, "mock-opencode.jsonl");
+
+    const result = await runCli(
+      cwd,
+      [
+        "ship it",
+        "--agent",
+        "claude",
+        "--max-iterations",
+        "3",
+        "--prevent-sleep",
+        "off",
+      ],
+      {
+        env: {
+          ...createTestEnv(mockLogPath, tempDirs),
+          GNHF_MOCK_CLAUDE_MODE: "overage-no-reset",
+        },
+      },
+    );
+
+    expect(result.code).toBe(0);
+    // The permanent stdout summary is what the user reads in the morning, so
+    // the reason gnhf stopped spending has to be in it.
+    expect(result.stdout).toContain("gnhf stopped");
+    expect(result.stdout).toContain(
+      "extra usage engaged but no reset time was reported",
+    );
+    // The billed iteration's work is kept; nothing after it runs.
+    expect(git(["rev-list", "--count", "HEAD"], cwd)).toBe("2");
+
+    const debugEvents = readJsonLines(findRunLogPath(cwd)).map(
+      (entry) => entry.event,
+    );
+    expect(debugEvents).toContain("overage:wait:unusable-reset");
+  }, 60_000);
+
   it("reads the objective from stdin", async () => {
     const cwd = createRepo();
     tempDirs.push(cwd);
@@ -583,6 +666,94 @@ describe("gnhf e2e", () => {
 
       // Stderr should mention that the worktree was preserved
       expect(result.stderr).toContain("worktree preserved");
+    },
+    30_000,
+  );
+
+  it.skipIf(process.platform !== "linux")(
+    "preserves a committed worktree after Linux sleep-prevention re-exec",
+    async () => {
+      const cwd = createRepo();
+      tempDirs.push(cwd);
+      const logDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-logs-"));
+      tempDirs.push(logDir);
+      const mockLogPath = join(logDir, "mock-opencode.jsonl");
+      const worktreeParent = `${cwd}-gnhf-worktrees`;
+      tempDirs.push(worktreeParent);
+      const fakeBinDir = mkdtempSync(join(tmpdir(), "gnhf-e2e-bin-"));
+      tempDirs.push(fakeBinDir);
+      // Records the pid it hands to gnhf, then execs so that pid IS the
+      // re-execed gnhf process. Comparing it against the pid stamped on the
+      // run log's run:start event proves the re-exec actually happened
+      // instead of the whole run staying in one process.
+      const markerPath = join(logDir, "inhibitor-invocations");
+      const inhibitorPath = join(fakeBinDir, "systemd-inhibit");
+      writeFileSync(
+        inhibitorPath,
+        [
+          "#!/usr/bin/env sh",
+          `echo "$$" >> "${markerPath}"`,
+          "while [ $# -gt 0 ]; do",
+          '  case "$1" in',
+          "    --*) shift ;;",
+          "    *) break ;;",
+          "  esac",
+          "done",
+          'exec "$@"',
+          "",
+        ].join("\n"),
+        "utf-8",
+      );
+      chmodSync(inhibitorPath, 0o755);
+
+      const env = createTestEnv(mockLogPath, tempDirs);
+      env.PATH = `${fakeBinDir}:${env.PATH ?? ""}`;
+
+      const result = await runCli(
+        cwd,
+        [
+          "linux reexec worktree",
+          "--agent",
+          "opencode",
+          "--max-iterations",
+          "1",
+          "--worktree",
+        ],
+        { env },
+      );
+
+      expect(result.code).toBe(0);
+      expect(result.stderr).toContain("worktree preserved");
+      const worktreeDirs = readdirSync(worktreeParent);
+      expect(worktreeDirs).toHaveLength(1);
+      const runId = worktreeDirs[0]!;
+      const worktreePath = join(worktreeParent, runId);
+      const runDir = join(worktreePath, ".gnhf", "runs", runId);
+      const logFilePath = join(runDir, "gnhf.log");
+      expect(existsSync(join(runDir, "notes.md"))).toBe(true);
+      expect(existsSync(logFilePath)).toBe(true);
+
+      // The inhibitor ran exactly once (the child must not re-exec again),
+      // and the run that produced this worktree ran inside that exec.
+      expect(existsSync(markerPath)).toBe(true);
+      const inhibitedPids = readFileSync(markerPath, "utf-8")
+        .split("\n")
+        .filter(Boolean);
+      expect(inhibitedPids).toHaveLength(1);
+      const startEvents = readJsonLines(logFilePath).filter(
+        (entry) => entry.event === "run:start",
+      );
+      expect(startEvents).toHaveLength(1);
+      expect(String(startEvents[0]!.pid)).toBe(inhibitedPids[0]);
+
+      // The committed work itself survived, not just the run metadata.
+      expect(git(["rev-parse", "--abbrev-ref", "HEAD"], worktreePath)).toMatch(
+        /^gnhf\//,
+      );
+      expect(git(["rev-list", "--count", "HEAD"], worktreePath)).toBe("2");
+      expect(git(["log", "-1", "--format=%s"], worktreePath)).toContain(
+        "gnhf 1:",
+      );
     },
     30_000,
   );

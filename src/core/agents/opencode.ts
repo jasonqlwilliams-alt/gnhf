@@ -7,7 +7,7 @@ import { createWriteStream, type WriteStream } from "node:fs";
 import { createServer } from "node:net";
 import {
   buildAgentOutputSchema,
-  validateAgentOutput,
+  parseAgentOutput,
   type Agent,
   type AgentOutput,
   type AgentOutputSchema,
@@ -16,7 +16,6 @@ import {
   type TokenUsage,
 } from "./types.js";
 import { appendDebugLog, serializeError } from "../debug-log.js";
-import { parseAgentJson } from "./json-extract.js";
 import { shutdownChildProcess } from "./managed-process.js";
 
 interface OpenCodeMessagePart {
@@ -138,6 +137,7 @@ interface OpenCodeDeps {
   fetch?: typeof fetch;
   getPort?: () => Promise<number>;
   killProcess?: typeof process.kill;
+  model?: string;
   platform?: NodeJS.Platform;
   schema?: AgentOutputSchema;
   spawn?: typeof spawn;
@@ -195,6 +195,20 @@ function buildStructuredOutputFormat(schema: AgentOutputSchema) {
   } as const;
 }
 
+function toOpenCodeModel(model: string): {
+  providerID: string;
+  modelID: string;
+} {
+  const slashIndex = model.indexOf("/");
+  if (slashIndex <= 0 || slashIndex === model.length - 1) {
+    throw new Error("OpenCode model must use provider/model.");
+  }
+  return {
+    providerID: model.slice(0, slashIndex),
+    modelID: model.slice(slashIndex + 1),
+  };
+}
+
 function buildOpencodeChildEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
   delete env.OPENCODE_SERVER_USERNAME;
@@ -211,32 +225,6 @@ function buildPrompt(prompt: string, schema: AgentOutputSchema): string {
     "Do not include any prose before or after the JSON.",
     `The JSON must match this schema exactly: ${JSON.stringify(schema)}`,
   ].join("\n");
-}
-
-function parseOpenCodeOutput(
-  text: string,
-  schema: AgentOutputSchema,
-): AgentOutput {
-  const parsed = parseAgentJson(text, (value) => {
-    try {
-      validateAgentOutput(value, schema);
-      return true;
-    } catch {
-      return false;
-    }
-  });
-  if (parsed !== null) {
-    return validateAgentOutput(parsed, schema);
-  }
-
-  const fallbackParsed = parseAgentJson(text);
-  if (fallbackParsed !== null) {
-    return validateAgentOutput(fallbackParsed, schema);
-  }
-
-  throw new SyntaxError(
-    "opencode output did not contain a parseable JSON object",
-  );
 }
 
 /**
@@ -348,6 +336,7 @@ export class OpenCodeAgent implements Agent {
   private fetchFn: typeof fetch;
   private getPortFn: () => Promise<number>;
   private killProcessFn: typeof process.kill;
+  private model?: string;
   private platform: NodeJS.Platform;
   private schema: AgentOutputSchema;
   private spawnFn: typeof spawn;
@@ -360,6 +349,7 @@ export class OpenCodeAgent implements Agent {
     this.fetchFn = deps.fetch ?? fetch;
     this.getPortFn = deps.getPort ?? getAvailablePort;
     this.killProcessFn = deps.killProcess ?? process.kill.bind(process);
+    this.model = deps.model;
     this.platform = deps.platform ?? process.platform;
     this.schema =
       deps.schema ?? buildAgentOutputSchema({ includeStopField: false });
@@ -776,6 +766,7 @@ export class OpenCodeAgent implements Agent {
             role: "user",
             parts: [{ type: "text", text: prompt }],
             format: buildStructuredOutputFormat(this.schema),
+            ...(this.model ? { model: toOpenCodeModel(this.model) } : {}),
           },
           signal,
         });
@@ -1114,7 +1105,7 @@ export class OpenCodeAgent implements Agent {
     }
 
     try {
-      const output = parseOpenCodeOutput(finalOutputText, this.schema);
+      const output = parseAgentOutput(finalOutputText, this.schema, "opencode");
       appendDebugLog("opencode:output:structured", {
         sessionId,
         source: "final_answer",

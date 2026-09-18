@@ -10,6 +10,7 @@ agent: claude
 #   codex: /path/to/custom-codex
 #   copilot: /path/to/custom-copilot
 #   pi: /path/to/custom-pi
+#   cursor: /path/to/custom-cursor-agent
 
 # Native agent CLI arg overrides (optional)
 # ACP targets do not support path or arg overrides.
@@ -30,6 +31,17 @@ agent: claude
 #     - gpt-5.5
 #     - --thinking
 #     - high
+#   cursor:
+#     - --model
+#     - composer-2.5
+
+# Models for supported native agents (optional)
+# Values are forwarded to the CLI except opencode, which receives
+# its model in the request body.
+# agentModel:
+#   claude: sonnet
+#   codex: gpt-5.4
+#   opencode: fireworks-ai/accounts/fireworks/models/qwen3p6-plus
 
 # Custom ACP target commands (optional)
 # Maps acp:<target> names to spawn commands. Useful for naming a
