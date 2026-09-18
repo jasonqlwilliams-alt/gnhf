@@ -211,6 +211,7 @@ If you run `gnhf` on an existing `gnhf/` branch with a different prompt, gnhf as
 | `--max-iterations <n>`             | Abort after `n` total iterations                                                                   | unlimited              |
 | `--max-tokens <n>`                 | Abort after `n` total input+output+cache tokens                                                    | unlimited              |
 | `--max-rate-limit-wait <duration>` | Abort after this much total Claude usage-limit wait (`30m`, `2h`, or `0`)                          | 24h safety cap         |
+| `--fallback-model <model>`         | Retry the first Claude usage-limit rejection on this model instead of waiting                      | none                   |
 | `--stop-when <cond>`               | End when the agent reports this condition, after any commit-failure repair; persists across resume | unlimited              |
 | `--prevent-sleep <mode>`           | Prevent system sleep during the run (`on`/`off` or `true`/`false`)                                 | config file (`on`)     |
 | `--worktree`                       | Run in a separate git worktree (enables multiple agents concurrently)                              | `false`                |
