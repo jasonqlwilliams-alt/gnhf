@@ -1,0 +1,40 @@
+                        ·  ·                       ·                  ·                       ·
+                                                                             ·
+    ·    ⋆                               ·                                                      ·             ·     ·
+         ·                                                                    ·                    ·
+                                                                              ·
+✧                                         ·                                               ·
+       ·                                                                                      ·
+      ·         °
+                                                 g n h f  ·  c o d e x
+                  ·     °                                                                                    °    ✧  ·
+ ·    ·             ⋆                                                                         ·
+  ⋆                             ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻
+                                ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫
+            ·                   ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹     ·
+   °                                                                                               ⋆
+           ·                  let's minimize app startup latency without sacrificing any
+                       °                             functionality                                                 °
+                   ⋆                                                                                         °    ⋆
+ ✧·                °  ·                                                                        ✧        °
+                                                                                                     °
+              ·                08:07:31 · 88.5M total · 87.7M in · 864K out · 11 commits                          ·
+                                                                                                 ··          ·
+                °  ·
+                                     Let me make sure HMR still works in dev mode
+                                                                                                            ·        ·
+                                                                                                ·
+
+              ·                                                                                      ·
+                                             🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌘
+
+   ✧                                                                                                          ·    ·
+                     ·                                                                         ·
+    ✧       ·
+              ·     ·                                      ·           ·                 ·                            ⋆·
+                      ·         ·                                              ·        ·                        ⋆
+                                                                     · ·     ·                  ·      ·        °
+                                ·
+                 ·                                    ·                                               ·
+                                         [ctrl+c to stop, gnhf again to resume]
+

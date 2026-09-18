@@ -1,0 +1,40 @@
+        ·                               ·                   ·                                   ·                ⋆      
+                                 ·                                     ·     ·                                          
+                       ·                                                          ·  ·                     ✧            
+                                       ·                   ·                     ·                 ⋆        °           
+                ✧                   ·                                                         ·              ✧          
+                                                                                             ·                    ·     
+          ⋆                                                                            ·                         °  ·   
+                                                                                               ·                        
+                                                 g n h f  ·  c o d e x                        ·                         
+         ·                                                                                                 ·            
+                                                                                                                     ⋆  
+                                ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻                                 
+     ·                          ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫                       ·         
+                                ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹          °                      
+                                                                                                                        
+              ⋆               let's minimize app startup latency without sacrificing any   ·                            
+                                                     functionality                                                      
+ ⋆  ·                                                                                                                   
+     ⋆                                                                                             °                    
+                                                                                              ✧                 °       
+                               08:07:23 · 88.3M total · 87.5M in · 860K out · 11 commits                                
+⋆                      ·                                                                                           ⋆    
+⋆                                                                                                   ·                   
+                                  Let me profile the require() chain with --cpu-prof                                    
+                                                                                                   °  ·                 
+                                                                                                                        
+                                                                                                                        
+ ·                                                                                                                    ⋆ 
+                                             🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌔            🌓      ⋆           °            ⋆°            ⋆  
+                   ·                                                                                °            ·      
+·                                                                                                                       
+        ·                    ·   ·        ·              ·                                                      ·       
+            ⋆                                                        ·                                            ⋆     
+                     ·               ·         ·                                                                        
+                                                                                                                        
+                     ·                                                                 ·                         ⋆      
+ ⋆            ⋆·                                        ·             ·                       ·                         
+     ·      ⋆                                     ·             ·                    ·                                  
+                                         [ctrl+c to stop, gnhf again to resume]                                         
+                                                                                                                        

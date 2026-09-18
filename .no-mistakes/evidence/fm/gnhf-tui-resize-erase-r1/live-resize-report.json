@@ -1,0 +1,294 @@
+{
+  "pty": {
+    "shrink": {
+      "erase_count": 0,
+      "leftover_outside_small": [
+        [
+          0,
+          96,
+          "\u00b7"
+        ],
+        [
+          0,
+          113,
+          "\u22c6"
+        ],
+        [
+          2,
+          82,
+          "\u00b7"
+        ],
+        [
+          2,
+          85,
+          "\u00b7"
+        ],
+        [
+          2,
+          107,
+          "\u2727"
+        ],
+        [
+          3,
+          81,
+          "\u00b7"
+        ],
+        [
+          3,
+          99,
+          "\u22c6"
+        ],
+        [
+          3,
+          108,
+          "\u00b0"
+        ],
+        [
+          4,
+          94,
+          "\u00b7"
+        ],
+        [
+          4,
+          109,
+          "\u2727"
+        ],
+        [
+          5,
+          93,
+          "\u00b7"
+        ],
+        [
+          5,
+          114,
+          "\u00b7"
+        ],
+        [
+          6,
+          87,
+          "\u00b7"
+        ],
+        [
+          6,
+          113,
+          "\u00b0"
+        ],
+        [
+          6,
+          116,
+          "\u00b7"
+        ],
+        [
+          7,
+          95,
+          "\u00b7"
+        ],
+        [
+          8,
+          94,
+          "\u00b7"
+        ],
+        [
+          8,
+          95,
+          "\u2727"
+        ],
+        [
+          9,
+          107,
+          "\u00b7"
+        ],
+        [
+          10,
+          117,
+          "\u22c6"
+        ]
+      ],
+      "leftover_count": 147,
+      "status": {
+        "prompt": true,
+        "brand": true,
+        "agent": true,
+        "commits": false
+      },
+      "output_len": 774
+    },
+    "restore": {
+      "erase_count": 0,
+      "status": {
+        "prompt": true,
+        "brand": true,
+        "agent": true,
+        "commits": true
+      },
+      "output_len": 832,
+      "screen_has_prompt": true
+    },
+    "narrow": {
+      "erase_count": 0,
+      "leftover_count": 196,
+      "leftover_sample": [
+        [
+          0,
+          60,
+          "\u00b7"
+        ],
+        [
+          0,
+          96,
+          "\u00b7"
+        ],
+        [
+          0,
+          113,
+          "\u22c6"
+        ],
+        [
+          1,
+          71,
+          "\u00b7"
+        ],
+        [
+          1,
+          77,
+          "\u00b7"
+        ],
+        [
+          2,
+          82,
+          "\u00b7"
+        ],
+        [
+          2,
+          85,
+          "\u00b7"
+        ],
+        [
+          2,
+          107,
+          "\u2727"
+        ],
+        [
+          3,
+          81,
+          "\u00b7"
+        ],
+        [
+          3,
+          99,
+          "\u22c6"
+        ],
+        [
+          3,
+          108,
+          "\u00b0"
+        ],
+        [
+          4,
+          94,
+          "\u00b7"
+        ],
+        [
+          4,
+          109,
+          "\u2727"
+        ],
+        [
+          5,
+          93,
+          "\u00b7"
+        ],
+        [
+          5,
+          114,
+          "\u00b7"
+        ],
+        [
+          6,
+          87,
+          "\u00b7"
+        ],
+        [
+          6,
+          113,
+          "\u00b0"
+        ],
+        [
+          6,
+          116,
+          "\u00b7"
+        ],
+        [
+          7,
+          95,
+          "\u00b7"
+        ],
+        [
+          8,
+          61,
+          "c"
+        ]
+      ],
+      "status": {
+        "prompt": false,
+        "brand": true,
+        "agent": false,
+        "commits": false
+      }
+    },
+    "tiny": {
+      "erase_count": 0,
+      "leftover_count": 396,
+      "status": {
+        "prompt": false,
+        "brand": false,
+        "agent": false,
+        "commits": false
+      }
+    },
+    "tiny_restore": {
+      "erase_count": 0,
+      "status": {
+        "prompt": true,
+        "brand": true,
+        "agent": true,
+        "commits": true
+      }
+    },
+    "initial": {
+      "erase_count": 0,
+      "status": {
+        "prompt": true,
+        "brand": true,
+        "agent": true,
+        "commits": true
+      }
+    },
+    "first_bytes_preview": "\\x1b[?1049h\\x1b[?25l\\x1b[22;0t\\x1b]2;gnhf \\U0001f314 \\xb7 88.2M total \\xb7 87.3M in \\xb7 860K out \\xb7 11 commits"
+  },
+  "tmux": {
+    "ok": true,
+    "initial_status": {
+      "prompt": true,
+      "brand": true,
+      "agent": true,
+      "commits": true
+    },
+    "shrink_status": {
+      "prompt": true,
+      "brand": true,
+      "agent": true,
+      "commits": true
+    },
+    "restore_status": {
+      "prompt": true,
+      "brand": true,
+      "agent": true,
+      "commits": true
+    },
+    "initial_lines": 40,
+    "shrink_lines": 24,
+    "restore_lines": 40,
+    "start_stderr": ""
+  }
+}

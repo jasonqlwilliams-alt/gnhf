@@ -1,0 +1,40 @@
+
+                         functionality
+
+
+
+
+
+
+
+   08:07:24 · 88.3M total · 87.5M in · 862K out · 11 commits
+
+
+
+
+
+      Let me profile the require() chain with --cpu-prof
+
+
+
+
+          5
+
+
+
+
+                 🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌕
+
+
+                                           🌘
+
+
+                     ·
+                                   ·
+    ·       ·
+
+              ·     ·                                      ·
+           ·                 ·                            ··
+                      ·         ·
+           [ctrl+c to stop, gnhf again to resume]
+

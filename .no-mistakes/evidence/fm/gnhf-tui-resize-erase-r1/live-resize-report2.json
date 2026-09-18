@@ -1,0 +1,143 @@
+{
+  "steps": [
+    {
+      "label": "live-initial-120x40",
+      "requested": "120x40",
+      "pane": "120x40",
+      "status": {
+        "prompt": true,
+        "brand": true,
+        "agent": true,
+        "commits": true,
+        "hint": true,
+        "banner": true
+      },
+      "leftover_markers": [
+        "line 12: duplicated banner"
+      ],
+      "erase_2J": 0,
+      "added_bytes": 6687,
+      "lines": 40,
+      "has_prompt": true
+    },
+    {
+      "label": "live-shrink-80x24",
+      "requested": "80x24",
+      "pane": "80x24",
+      "status": {
+        "prompt": true,
+        "brand": true,
+        "agent": true,
+        "commits": true,
+        "hint": true,
+        "banner": true
+      },
+      "leftover_markers": [
+        "line 5: duplicated banner"
+      ],
+      "erase_2J": 1,
+      "added_bytes": 2734,
+      "lines": 24,
+      "has_prompt": true
+    },
+    {
+      "label": "live-restore-120x40",
+      "requested": "120x40",
+      "pane": "120x40",
+      "status": {
+        "prompt": true,
+        "brand": true,
+        "agent": true,
+        "commits": true,
+        "hint": true,
+        "banner": true
+      },
+      "leftover_markers": [
+        "line 12: duplicated banner"
+      ],
+      "erase_2J": 1,
+      "added_bytes": 6623,
+      "lines": 40,
+      "has_prompt": true
+    },
+    {
+      "label": "live-narrow-60x40",
+      "requested": "60x40",
+      "pane": "60x40",
+      "status": {
+        "prompt": false,
+        "brand": false,
+        "agent": false,
+        "commits": true,
+        "hint": true,
+        "banner": false
+      },
+      "leftover_markers": [],
+      "erase_2J": 1,
+      "added_bytes": 3501,
+      "lines": 40,
+      "has_prompt": false
+    },
+    {
+      "label": "live-narrow-restore-120x40",
+      "requested": "120x40",
+      "pane": "120x40",
+      "status": {
+        "prompt": true,
+        "brand": true,
+        "agent": true,
+        "commits": true,
+        "hint": true,
+        "banner": true
+      },
+      "leftover_markers": [
+        "line 12: duplicated banner"
+      ],
+      "erase_2J": 1,
+      "added_bytes": 6734,
+      "lines": 40,
+      "has_prompt": true
+    },
+    {
+      "label": "live-tiny-40x12",
+      "requested": "40x12",
+      "pane": "40x12",
+      "status": {
+        "prompt": false,
+        "brand": false,
+        "agent": false,
+        "commits": false,
+        "hint": true,
+        "banner": false
+      },
+      "leftover_markers": [],
+      "erase_2J": 1,
+      "added_bytes": 1148,
+      "lines": 12,
+      "has_prompt": false
+    },
+    {
+      "label": "live-tiny-restore-120x40",
+      "requested": "120x40",
+      "pane": "120x40",
+      "status": {
+        "prompt": true,
+        "brand": true,
+        "agent": true,
+        "commits": true,
+        "hint": true,
+        "banner": true
+      },
+      "leftover_markers": [
+        "line 12: duplicated banner"
+      ],
+      "erase_2J": 1,
+      "added_bytes": 6686,
+      "lines": 40,
+      "has_prompt": true
+    }
+  ],
+  "raw_total_bytes": 40584,
+  "raw_erase_2J_total": 6,
+  "raw_cursor_home_total": 7
+}

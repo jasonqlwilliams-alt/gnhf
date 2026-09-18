@@ -1,0 +1,230 @@
+[?1049h[?25l[22;0t]2;gnhf 🌘 · 88.2M total · 87.3M in · 860K out · 11 commits[H                        [2m·[0m  [2m·[0m                       [2m·[0m                  [2m·[0m                       [2m·[0m                         
+                                                                             [2m·[0m                                          
+    [2m·[0m    [1m⋆[0m                               [2m·[0m                                                      [2m·[0m             [2m·[0m     [1m·[0m   
+         [2m·[0m                                                                    [2m·[0m                    [2m·[0m                    
+                                                                              [2m·[0m                                         
+[2m✧[0m                                         [2m·[0m                                               [2m·[0m                             
+       [2m·[0m                                                                                      [2m·[0m                         
+      [1m·[0m         [1m°[0m                                                                                                      
+                                                 [2mg n h f[0m  [2m·[0m  [2mc o d e x[0m                                                 
+                  [1m·[0m     [1m°[0m                                                                                    [1m°[0m    [1m✧[0m  [1m·[0m 
+ [2m·[0m    [2m·[0m             [2m⋆[0m                                                                         [1m·[0m                        
+  [2m⋆[0m                             [1m┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻[0m                                
+                                [1m┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫[0m                                
+            [1m·[0m                   [1m┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹[0m     [1m·[0m                          
+   [1m°[0m                                                                                               [2m⋆[0m [1m·[0m                 
+           [1m·[0m                  [2mlet's minimize app startup latency without sacrificing any[0m                               
+                       [2m°[0m                             [2mfunctionality[0m                                                 [1m°[0m   
+                   [1m⋆[0m                                                                                         [1m°[0m    [2m⋆[0m    
+ [1m✧·[0m                [2m°[0m  [2m·[0m                                                                        [1m✧[0m        [1m°[0m              
+                                                                                                     [1m°[0m                 
+              [1m·[0m                [1m08:07:17[0m [2m·[0m 88.2M total [2m·[0m 87.3M in [2m·[0m 860K out [2m·[0m 11 commits                          [1m·[0m    
+                                                                                                 [1m·[0m[2m·[0m          [1m·[0m         
+                [2m°[0m  [1m·[0m                                                                                                   
+                                [2mReading src/bootstrap.ts to trace the module init order[0m                                
+                                                                                                                     [2m·[0m 
+                                                                                                [1m·[0m                      
+                                                                                                                       
+              [2m·[0m                                                                                                        
+                                             🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌘                                              
+                                                                                                                       
+   [1m✧[0m                                                                                                          [1m·[0m    [2m·[0m   
+                     [2m·[0m                                                                         [2m·[0m                        
+    [1m✧[0m       [1m·[0m                                                                                                           
+              [1m·[0m     [2m·[0m                                      [2m·[0m           [2m·[0m                 [2m·[0m                            [1m⋆·[0m
+                      [2m·[0m         [2m·[0m                                              [2m·[0m        [2m·[0m                        [1m⋆[0m      
+                                                                     [2m·[0m [2m·[0m     [2m·[0m                  [2m·[0m      [1m·[0m        [1m°[0m       
+                                [1m·[0m                                                                                       
+                 [2m·[0m                                    [2m·[0m                                               [2m·[0m                 
+                                         [2m[ctrl+c to stop, gnhf again to resume][0m                                         
+                                                                                                                        ]2;gnhf 🌑 · 88.2M total · 87.3M in · 860K out · 11 commits[28;102H[0m[2m·[29;72H[0m🌑]2;gnhf 🌒 · 88.2M total · 87.3M in · 860K out · 11 commits[3;5H[0m [8;103H[0m[2m·[18;110H°[28;102H[0m[1m·[29;72H[0m🌒[37;33H[0m[2m·[0m]2;gnhf 🌓 · 88.2M total · 87.3M in · 860K out · 11 commits[3;5H[0m[2m·[18;110H[0m [25;109H[0m[2m·[29;72H[0m🌓]2;gnhf 🌔 · 88.2M total · 87.3M in · 860K out · 11 commits[8;103H[0m[1m·[15;100H⋆[18;110H[0m[2m°[25;109H[0m[1m·[29;72H[0m🌔]2;gnhf 🌕 · 88.2M total · 87.3M in · 860K out · 11 commits[2;78H[0m[1m·[3;5H·[18;110H°[21;39H8[25;109H[0m[2m·[29;72H[0m🌕]2;gnhf 🌖 · 88.2M total · 87.3M in · 860K out · 11 commits[8;19H[0m[2m·[8;103H·[15;100H⋆[29;72H[0m🌖[34;119H[0m[2m⋆[0m]2;gnhf 🌗 · 88.2M total · 87.3M in · 860K out · 11 commits[1;25H[0m[1m·[2;78H[0m[2m·[8;19H[0m[1m·[8;103H[0m [22;110H[0m[2m·[25;109H[0m [29;72H🌗[34;119H ]2;gnhf 🌘 · 88.2M total · 87.3M in · 860K out · 11 commits[29;72H[0m🌘[34;119H[0m[2m⋆[0m]2;gnhf 🌑 · 88.2M total · 87.3M in · 860K out · 11 commits[3;42H[0m[1m·[8;19H[0m[2m·[19;20H[0m[1m°[22;110H[0m [29;72H🌑[34;120H[0m[2m·[0m]2;gnhf 🌒 · 88.2M total · 87.3M in · 860K out · 11 commits[1;25H[0m[2m·[3;42H·[4;100H[0m[1m·[8;19H[0m [19;20H[0m[2m°[21;39H[0m[1m9[22;110H[0m[2m·[29;72H[0m🌒[34;119H[0m[1m⋆[0m [36;15H[0m[2m⋆[0m]2;gnhf 🌓 · 88.2M total · 87.3M in · 860K out · 11 commits[10;113H[0m[2m·[13;101H✧[29;72H[0m🌓[34;120H[0m[2m·[0m]2;gnhf 🌔 · 88.2M total · 87.3M in · 860K out · 11 commits[4;100H[0m[2m·[13;101H[0m[1m✧[22;110H·[29;72H[0m🌔[34;120H[0m[1m·[36;15H[0m [38;55H[0m[1m·[0m]2;gnhf 🌕 · 88.2M total · 87.3M in · 860K out · 11 commits[3;97H[0m[1m·[10;113H·[11;7H·[13;101H[0m[2m✧[29;72H[0m🌕]2;gnhf 🌖 · 88.2M total · 87.3M in · 860K out · 11 commits[3;97H[0m[2m·[10;113H·[29;72H[0m🌖]2;gnhf 🌗 · 88.2M total · 87.3M in · 860K out · 11 commits[11;7H[0m[2m·[13;101H[0m [18;115H[0m[1m⋆[21;38H20[22;98H[0m[2m·[29;72H[0m🌗[36;97H[0m[1m·[38;55H[0m[2m·[0m]2;gnhf 🌘 · 88.2M total · 87.3M in · 860K out · 11 commits[2J[H      [1m·[0m                                                                        
+                             [2mg n h f[0m  [2m·[0m  [2mc o d e x[0m                             
+                                                                               
+                                                                            [1m·[0m  
+  [1m·[0m         [1m┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻[0m            
+            [1m┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫[0m            
+  [2m⋆[0m         [1m┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹[0m      [1m·[0m     
+                                                                               
+          [2mlet's minimize app startup latency without sacrificing any[0m           
+                                 [2mfunctionality[0m                                 
+      [1m·[0m                                                                        
+                                                                               
+                                                                             [1m·[0m 
+           [1m08:07:20[0m [2m·[0m 88.2M total [2m·[0m 87.3M in [2m·[0m 860K out [2m·[0m 11 commits           
+                                                                           [1m°[0m   
+                                                                               
+            [2mReading src/bootstrap.ts to trace the module init order[0m            
+                                                                               
+                                                                               
+                                                                               
+                                                                          [1m·[0m    
+                         🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌘                          
+                     [2m[ctrl+c to stop, gnhf again to resume][0m                     
+                                                                                ]2;gnhf 🌑 · 88.2M total · 87.3M in · 860K out · 11 commits[22;52H[0m🌑]2;gnhf 🌒 · 88.2M total · 87.3M in · 860K out · 11 commits[22;52H[0m🌒]2;gnhf 🌓 · 88.2M total · 87.3M in · 860K out · 11 commits[22;52H[0m🌓]2;gnhf 🌔 · 88.2M total · 87.3M in · 860K out · 11 commits[14;19H[0m[1m1[22;52H[0m🌔]2;gnhf 🌕 · 88.2M total · 87.3M in · 860K out · 11 commits[22;52H[0m🌕]2;gnhf 🌖 · 88.2M total · 87.3M in · 860K out · 11 commits[22;52H[0m🌖]2;gnhf 🌗 · 88.2M total · 87.3M in · 860K out · 11 commits[22;52H[0m🌗]2;gnhf 🌘 · 88.2M total · 87.3M in · 860K out · 11 commits[22;52H[0m🌘]2;gnhf 🌑 · 88.2M total · 87.3M in · 860K out · 11 commits[14;19H[0m[1m2[22;52H[0m🌑]2;gnhf 🌒 · 88.2M total · 87.3M in · 860K out · 11 commits[2J[H                        [2m·[0m  [2m·[0m                       [2m·[0m                  [2m·[0m                       [2m·[0m                         
+                                                                             [2m·[0m                                          
+    [1m·[0m    [1m⋆[0m[2m·[0m                              [2m·[0m                                                      [2m·[0m             [2m·[0m     [1m·[0m   
+         [2m·[0m                                                                    [2m·[0m                    [2m·[0m                    
+                                                                              [2m·[0m                                         
+[2m✧[0m                                         [2m·[0m                                               [2m·[0m                             
+       [2m·[0m                                                                                      [2m·[0m                         
+      [1m·[0m         [2m°[0m                                                                                                      
+                                                 [2mg n h f[0m  [2m·[0m  [2mc o d e x[0m                                                 
+    [2m·[0m             [1m·[0m     [1m°[0m                                                                                    [1m°[0m    [1m✧[0m  [1m·[0m 
+ [2m·[0m    [2m·[0m             [2m⋆[0m                                                                         [1m·[0m                        
+  [2m⋆[0m                             [1m┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻[0m                                
+                                [1m┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫[0m                                
+            [1m·[0m                   [1m┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹[0m     [1m·[0m                          
+   [1m°[0m                                                                                               [2m⋆[0m [1m·[0m                 
+           [1m·[0m                  [2mlet's minimize app startup latency without sacrificing any[0m                               
+                       [2m°[0m                             [2mfunctionality[0m                                                 [1m°[0m   
+                   [1m⋆[0m                                                                                         [1m°[0m    [2m⋆[0m    
+ [1m✧[0m[2m·[0m                [2m°[0m  [2m·[0m                                                                        [2m✧[0m        [1m°[0m              
+                                                                                                     [1m°[0m                 
+              [1m·[0m                [1m08:07:22[0m [2m·[0m 88.2M total [2m·[0m 87.3M in [2m·[0m 860K out [2m·[0m 11 commits                          [1m·[0m    
+                                                                                                 [1m·[0m[2m·[0m          [1m·[0m         
+                [2m°[0m  [1m·[0m                                                                                                   
+                                [2mReading src/bootstrap.ts to trace the module init order[0m                                
+                                                                                                                     [2m·[0m 
+                                                                                                [1m·[0m                      
+                                                                                                                       
+              [2m·[0m                                                                                      [1m·[0m                 
+                                             🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌒                                              
+                                                                                                                       
+   [1m✧[0m                                                                                                          [1m·[0m    [2m·[0m   
+                     [2m·[0m                                                                         [2m·[0m                        
+    [1m✧[0m       [1m·[0m                                                                                                           
+              [2m·[0m     [2m·[0m                                      [2m·[0m           [2m·[0m                 [2m·[0m                            [1m⋆·[0m
+                      [2m·[0m         [2m·[0m                                              [2m·[0m        [2m·[0m                        [1m⋆[0m      
+                                                                     [2m·[0m [2m·[0m     [2m·[0m                  [2m·[0m      [1m·[0m        [1m°[0m       
+                                [2m·[0m                                                                                       
+                 [2m·[0m                                    [2m·[0m                                               [2m·[0m                 
+                                         [2m[ctrl+c to stop, gnhf again to resume][0m                                         
+                                                                                                                        ]2;gnhf 🌓 · 88.2M total · 87.3M in · 860K out · 11 commits[8;17H[0m [10;5H[0m[1m·[19;96H[0m [20;15H[0m[2m⋆[29;72H[0m🌓]2;gnhf 🌔 · 88.2M total · 87.3M in · 860K out · 11 commits[3;11H[0m[1m·[10;5H[0m[2m·[19;3H[0m[1m·[19;96H[0m[2m✧[29;72H[0m🌔[34;15H[0m[1m·[0m]2;gnhf 🌕 · 88.2M total · 87.3M in · 860K out · 11 commits[3;11H[0m[2m·[8;17H°[10;5H[0m [19;2H[0m[2m✧[20;15H[0m [29;72H🌕]2;gnhf 🌖 · 88.2M total · 87.3M in · 860K out · 11 commits[19;96H[0m[1m✧[21;39H3[29;72H[0m🌖]2;gnhf 🌗 · 88.2M total · 87.3M in · 860K out · 11 commits[3;11H[0m [8;17H[0m[1m°[19;2H[0m [24;33H  [0m[2mLet me profile [24;51Hhe require() [24;65Hhain with --cpu-pr[24;84Hf[0m   [29;72H🌗]2;gnhf 🌘 · 88.3M total · 87.5M in · 862K out · 11 commits[1;71H[0m[1m·[19;2H[0m[2m✧[21;46H[0m3[21;60H5[21;70H2[29;72H🌘]2;gnhf 🌑 · 88.3M total · 87.5M in · 862K out · 11 commits[1;95H[0m[1m·[29;72H[0m🌑]2;gnhf 🌒 · 88.3M total · 87.5M in · 862K out · 11 commits[10;25H[0m[2m°[11;21H[0m[1m⋆[19;2H✧[23;17H°[23;20H[0m[2m·[29;72H[0m🌒]2;gnhf 🌓 · 88.3M total · 87.5M in · 862K out · 11 commits[1;71H[0m[2m·[1;95H·[21;39H[0m[1m4[23;20H[0m [29;72H🌓]2;gnhf 🌔 · 88.3M total · 87.5M in · 862K out · 11 commits[5;79H[0m[1m·[10;25H[0m [11;21H[0m[2m⋆[23;17H°[23;20H·[29;72H[0m🌔[38;18H[0m[1m·[0m]2;gnhf 🌕 · 88.3M total · 87.5M in · 862K out · 11 commits[2J[H                        [2m·[0m  [2m·[0m                       [2m·[0m        
+          [2m·[0m                       [2m·[0m                         
+                                                            
+                 [2m·[0m                                          
+    [2m·[0m    [2m·[0m                               [2m·[0m                  
+                                    [2m·[0m             [2m·[0m     [2m·[0m   
+         [2m·[0m                                                  
+                                                               
+                     [2mg n h f[0m  [2m·[0m  [2mc o d e x[0m                     
+                                                               
+                                                               
+    [1m┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻[0m    
+    [1m┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫[0m    
+    [1m┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹[0m    
+                                                               
+  [2mlet's minimize app startup latency without sacrificing any[0m   
+                         [2mfunctionality[0m                         
+                                                               
+                                                               
+                                                               
+   [1m08:07:24[0m [2m·[0m 88.3M total [2m·[0m 87.5M in [2m·[0m 862K out [2m·[0m 11 commits   
+                                                               
+                                                               
+      [2mLet me profile the require() chain with --cpu-prof[0m       
+                                                               
+                                                               
+                                                               
+                                                               
+                 🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌕                  
+                                                               
+                                                               
+                     [2m·[0m                                      
+                                   [2m·[0m                        
+    [2m·[0m       [2m·[0m                                               
+                                                            
+              [2m·[0m     [2m·[0m                                      [2m·[0m
+           [2m·[0m                 [2m·[0m                            [2m··[0m
+                      [2m·[0m         [2m·[0m                           
+           [2m[ctrl+c to stop, gnhf again to resume][0m           
+                                                            ]2;gnhf 🌖 · 88.3M total · 87.5M in · 862K out · 11 commits[29;44H[0m🌖]2;gnhf 🌗 · 88.3M total · 87.5M in · 862K out · 11 commits[29;44H[0m🌗]2;gnhf 🌘 · 88.3M total · 87.5M in · 862K out · 11 commits[21;11H[0m[1m5[29;44H[0m🌘]2;gnhf 🌑 · 88.3M total · 87.5M in · 862K out · 11 commits[29;44H[0m🌑]2;gnhf 🌒 · 88.5M total · 87.6M in · 862K out · 11 commits[21;18H[0m5[21;32H6[29;44H🌒]2;gnhf 🌓 · 88.5M total · 87.6M in · 862K out · 11 commits[29;44H[0m🌓[37;30H[0m[1m·[0m]2;gnhf 🌔 · 88.5M total · 87.6M in · 862K out · 11 commits[6;57H[0m[1m·[29;44H[0m🌔]2;gnhf 🌕 · 88.5M total · 87.6M in · 862K out · 11 commits[21;11H[0m[1m6[29;44H[0m🌕]2;gnhf 🌖 · 88.5M total · 87.6M in · 862K out · 11 commits[6;57H[0m[2m·[29;44H[0m🌖[37;30H[0m[2m·[0m]2;gnhf 🌗 · 88.5M total · 87.6M in · 862K out · 11 commits[29;44H[0m🌗]2;gnhf 🌘 · 88.5M total · 87.6M in · 862K out · 11 commits[2J[H                        [2m·[0m  [2m·[0m                       [2m·[0m                  [2m·[0m                       [2m·[0m                         
+                                                                             [2m·[0m                                          
+    [1m·[0m    [2m⋆[0m                               [2m·[0m                                                      [2m·[0m             [2m·[0m     [1m·[0m   
+         [2m·[0m                                                                    [2m·[0m                    [2m·[0m                    
+                                                                              [2m·[0m                                         
+[2m✧[0m                                         [2m·[0m                                               [1m·[0m                             
+       [2m·[0m                                                                                      [2m·[0m                         
+      [1m·[0m         [1m°[0m                                                                                                      
+                                                 [2mg n h f[0m  [2m·[0m  [2mc o d e x[0m                                                 
+                  [1m·[0m     [1m°[0m                                                                                         [1m✧[0m  [1m·[0m 
+ [2m·[0m    [2m·[0m             [2m⋆[0m                                                                         [1m·[0m                        
+  [2m⋆[0m                             [1m┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻[0m                                
+                                [1m┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫[0m                                
+            [2m·[0m                   [1m┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹[0m     [1m·[0m                          
+   [1m°[0m                                                                                               [2m⋆[0m [1m·[0m                 
+           [1m·[0m                  [2mlet's minimize app startup latency without sacrificing any[0m                               
+                       [2m°[0m                             [2mfunctionality[0m                                                 [1m°[0m   
+                   [1m⋆[0m                                                                                         [1m°[0m    [2m⋆[0m    
+ [1m✧·[0m                [2m°[0m  [2m·[0m                                                                        [1m✧[0m        [1m°[0m              
+                                                                                                     [1m°[0m                 
+              [1m·[0m                [1m08:07:26[0m [2m·[0m 88.5M total [2m·[0m 87.6M in [2m·[0m 862K out [2m·[0m 11 commits                          [1m·[0m    
+                                                                                                 [1m··[0m          [1m·[0m         
+                [2m°[0m  [1m·[0m                                                                                                   
+                                  [2mLet me profile the require() chain with --cpu-prof[0m                                   
+                                                                                                                     [2m·[0m 
+                                                                                                [1m·[0m                      
+                                                                                                                       
+              [2m·[0m                                                                                      [1m·[0m                 
+                                             🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌘                                              
+                                                                                                                       
+   [1m✧[0m                                                                                                          [1m·[0m    [2m·[0m   
+                     [2m·[0m                                                                         [2m·[0m                        
+    [1m✧[0m       [1m·[0m                                                                                                           
+              [1m·[0m     [2m·[0m                                      [2m·[0m           [2m·[0m                 [2m·[0m                            [1m⋆·[0m
+                      [2m·[0m         [2m·[0m                                              [2m·[0m        [2m·[0m                               
+                                                                     [2m·[0m [2m·[0m     [2m·[0m                  [2m·[0m      [1m·[0m        [1m°[0m       
+                                [2m·[0m                                                                                       
+                 [2m·[0m                                    [2m·[0m                                               [2m·[0m                 
+                                         [2m[ctrl+c to stop, gnhf again to resume][0m                                         
+                                                                                                                        ]2;gnhf 🌑 · 88.5M total · 87.6M in · 862K out · 11 commits[1;28H[0m[1m·[3;10H[0m [6;91H[0m[2m·[14;13H[0m[1m·[22;99H[0m[2m·[29;72H[0m🌑[32;73H[0m[2m·[32;96H[0m[1m·[35;114H[0m[2m⋆[0m]2;gnhf 🌒 · 88.5M total · 87.6M in · 862K out · 11 commits[1;28H[0m[2m·[10;110H°[11;95H·[19;105H°[20;102H°[21;39H[0m[1m7[24;33H[0m[2mRunning integration tests after the lazy-load refactor[29;72H[0m🌒[36;70H[0m[1m·[0m]2;gnhf 🌓 · 88.5M total · 87.6M in · 862K out · 11 commits[3;10H[0m[2m⋆[15;4H°[20;102H[0m [29;72H🌓[32;73H[0m[1m·[35;114H⋆[0m]2;gnhf 🌔 · 88.5M total · 87.6M in · 862K out · 11 commits[10;110H[0m[1m°[11;95H[0m [15;4H [19;105H [20;102H[0m[2m°[21;115H·[29;72H[0m🌔[32;73H[0m[2m·[32;96H·[36;70H·[0m]2;gnhf 🌕 · 88.5M total · 87.6M in · 862K out · 11 commits[3;10H[0m[1m⋆[19;105H[0m[2m°[20;102H[0m[1m°[29;72H[0m🌕[34;72H[0m[1m·[0m]2;gnhf 🌖 · 88.5M total · 87.6M in · 862K out · 11 commits[11;95H[0m[2m·[15;4H°[17;24H[0m[1m°[21;115H[0m [29;72H🌖[32;73H [34;72H[0m[2m·[0m]2;gnhf 🌗 · 88.5M total · 87.6M in · 862K out · 11 commits[19;105H[0m[1m°[21;39H8[29;72H[0m🌗[33;5H[0m[2m✧[0m]2;gnhf 🌘 · 88.5M total · 87.6M in · 862K out · 11 commits[6;1H[0m[1m✧[11;95H·[15;4H°[16;12H[0m[2m·[21;115H·[29;72H[0m🌘]2;gnhf 🌑 · 88.5M total · 87.6M in · 862K out · 11 commits[7;95H[0m[1m·[16;12H[0m [17;24H[0m[2m°[29;72H[0m🌑[33;5H ]2;gnhf 🌒 · 88.5M total · 87.6M in · 862K out · 11 commits[2J[H                                                               
+   [1m08:07:28[0m [2m·[0m 88.5M total [2m·[0m 87.6M in [2m·[0m 862K out [2m·[0m 11 commits   
+                                                               
+                                                               
+                 🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌒                  
+                                                               
+                                                               
+                                                               
+                                                               
+                                                               
+ [2m[ctrl+c to stop, gnhf again to resume][0m 
+                                        ]2;gnhf 🌓 · 88.5M total · 87.6M in · 862K out · 11 commits[5;44H[0m🌓]2;gnhf 🌔 · 88.5M total · 87.6M in · 862K out · 11 commits[2;11H[0m[1m9[5;44H[0m🌔]2;gnhf 🌕 · 88.5M total · 87.6M in · 862K out · 11 commits[5;44H[0m🌕]2;gnhf 🌖 · 88.5M total · 87.6M in · 862K out · 11 commits[5;44H[0m🌖]2;gnhf 🌗 · 88.5M total · 87.6M in · 862K out · 11 commits[5;44H[0m🌗]2;gnhf 🌘 · 88.5M total · 87.6M in · 862K out · 11 commits[5;44H[0m🌘]2;gnhf 🌑 · 88.5M total · 87.6M in · 862K out · 11 commits[2;10H[0m[1m30[5;44H[0m🌑]2;gnhf 🌒 · 88.5M total · 87.6M in · 862K out · 11 commits[5;44H[0m🌒]2;gnhf 🌓 · 88.5M total · 87.6M in · 862K out · 11 commits[5;44H[0m🌓]2;gnhf 🌔 · 88.5M total · 87.6M in · 862K out · 11 commits[5;44H[0m🌔]2;gnhf 🌕 · 88.5M total · 87.6M in · 862K out · 11 commits[2J[H                        [2m·[0m  [2m·[0m                       [1m·[0m                  [2m·[0m                       [2m·[0m                         
+                                                                             [2m·[0m                                          
+    [1m·[0m    [1m⋆[0m                               [2m·[0m                                                      [2m·[0m             [2m·[0m     [1m·[0m   
+         [2m·[0m                                                                    [2m·[0m                    [2m·[0m                    
+                                                                              [2m·[0m                                         
+[2m✧[0m                                         [2m·[0m                                               [2m·[0m                             
+       [2m·[0m                                                                                      [2m·[0m                         
+      [1m·[0m         [1m°[0m                                                                                                      
+                                                 [2mg n h f[0m  [2m·[0m  [2mc o d e x[0m                                                 
+                  [1m·[0m     [1m°[0m                                                                                    [1m°[0m    [1m✧[0m  [1m·[0m 
+ [2m·[0m    [2m·[0m             [2m⋆[0m                                                                         [1m·[0m                        
+  [2m⋆[0m                             [1m┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻[0m                                
+                                [1m┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫[0m                                
+            [1m·[0m                   [1m┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹[0m     [1m·[0m                          
+   [1m°[0m                                                                                               [2m⋆[0m [1m·[0m                 
+           [1m·[0m                  [2mlet's minimize app startup latency without sacrificing any[0m                               
+                       [2m°[0m                             [2mfunctionality[0m                                                 [1m°[0m   
+                   [1m⋆[0m                                                                                         [1m°[0m    [2m⋆[0m    
+ [1m✧·[0m                [2m°[0m  [2m·[0m                                                                        [1m✧[0m        [1m°[0m              
+                                                                                                     [1m°[0m                 
+              [1m·[0m                [1m08:07:30[0m [2m·[0m 88.5M total [2m·[0m 87.6M in [2m·[0m 862K out [2m·[0m 11 commits                          [1m·[0m    
+                                                                                                 [1m·[0m[2m·[0m          [1m·[0m         
+                [2m°[0m  [1m·[0m                                                                                                   
+                                     [2mLet me make sure HMR still works in dev mode[0m                                      
+                                                                                                                     [2m·[0m 
+                                                                                                [1m·[0m                      
+                                                                                                                       
+              [2m·[0m                                                                                      [2m·[0m                 
+                                             🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌕                                              
+                                                                                                                       
+   [1m✧[0m                                                                                                          [1m·[0m    [2m·[0m   
+                     [2m·[0m                                                                         [2m·[0m                        
+    [1m✧[0m       [1m·[0m                                                                                                           
+              [1m·[0m     [2m·[0m                                      [2m·[0m           [2m·[0m                 [2m·[0m                            [1m⋆·[0m
+                      [2m·[0m         [2m·[0m                                              [2m·[0m        [2m·[0m                        [1m⋆[0m      
+                                                                     [2m·[0m [2m·[0m     [2m·[0m                  [2m·[0m      [2m·[0m        [1m°[0m       
+                                [2m·[0m                                                                                       
+                 [2m·[0m                                    [2m·[0m                                               [2m·[0m                 
+                                         [2m[ctrl+c to stop, gnhf again to resume][0m                                         
+                                                                                                                        ]2;gnhf 🌕 · 88.5M total · 87.7M in · 864K out · 11 commits]2;gnhf 🌖 · 88.5M total · 87.7M in · 864K out · 11 commits[15;102H[0m[2m·[21;39H[0m[1m1[21;60H[0m7[21;70H4[25;109H[0m[2m·[29;72H[0m🌖[36;104H[0m[1m·[0m]2;gnhf 🌗 · 88.5M total · 87.7M in · 864K out · 11 commits[1;52H[0m[2m·[25;109H[0m[1m·[28;102H[0m [29;72H🌗]2;gnhf 🌘 · 88.5M total · 87.7M in · 864K out · 11 commits[4;79H[0m[1m·[15;102H[0m [25;109H[0m[2m·[28;102H·[29;72H[0m🌘[31;116H[0m[1m·[32;22H·[0m]2;gnhf 🌑 · 88.5M total · 87.7M in · 864K out · 11 commits[10;19H[0m[2m·[15;102H·[25;109H[0m [28;102H[0m[1m·[29;72H[0m🌑[32;22H[0m[2m·[0m]2;gnhf 🌒 · 88.5M total · 87.7M in · 864K out · 11 commits[3;42H[0m[1m·[4;79H[0m[2m·[15;102H[0m[1m·[22;98H[0m[2m·[29;72H[0m🌒[31;116H[0m[2m·[0m]2;gnhf 🌓 · 88.5M total · 87.7M in · 864K out · 11 commits[3;42H[0m[2m·[10;19H[0m [21;39H[0m[1m2[22;98H[0m [29;72H🌓]2;gnhf 🌔 · 88.5M total · 87.7M in · 864K out · 11 commits[10;5H[0m[2m·[10;19H·[22;98H·[25;118H[0m[1m·[29;72H[0m🌔]2;gnhf 🌕 · 88.5M total · 87.7M in · 864K out · 11 commits[3;111H[0m[1m·[10;5H·[22;98H·[29;72H[0m🌕]2;gnhf 🌖 · 88.5M total · 87.7M in · 864K out · 11 commits[3;111H[0m[2m·[10;5H·[10;19H[0m[1m·[25;118H[0m[2m·[29;72H[0m🌖

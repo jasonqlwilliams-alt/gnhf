@@ -1,0 +1,39 @@
+                                                                    ·                                             ✧
+                    · ·           ·                     ·        ·                ·        ·                       ✧
+        ·                                                             ··          ·   ·
+   °                       ·                       ·                            ·    ·             ·
+                               ·     ·            ·                                ·             ·                     ·
+           ·
+                                                 ·  ·                                                         °
+
+                   ⋆                             g n h f  ·  c o d e x                        ·    ⋆    ·         ✧
+                                                                                                             ·
+                                                                                                             ⋆        ·
+       ·⋆                       ┏━╸┏━┓┏━┓╺┳┓   ┏┓╻╻┏━╸╻ ╻╺┳╸   ╻ ╻┏━┓╻ ╻┏━╸   ┏━╸╻ ╻┏┓╻                           ·
+         ·                      ┃╺┓┃ ┃┃ ┃ ┃┃   ┃┗┫┃┃╺┓┣━┫ ┃    ┣━┫┣━┫┃┏┛┣╸    ┣╸ ┃ ┃┃┗┫          °                  ·
+   ·                            ┗━┛┗━┛┗━┛╺┻┛   ╹ ╹╹┗━┛╹ ╹ ╹    ╹ ╹╹ ╹┗┛ ┗━╸   ╹  ┗━┛╹ ╹          ⋆       ✧
+               ·
+          ·  °     ·          let's minimize app startup latency without sacrificing any    ·
+                                                     functionality                              ·                    ·
+       ✧ ·
+
+                           ·                                                                                         ·
+         ·                     08:07:19 · 88.2M total · 87.3M in · 860K out · 11 commits          ·⋆
+
+                  ✧                                                                                     ·
+·             °                 Reading src/bootstrap.ts to trace the module init order                           °
+            ·
+      ·                                                                                            ·          ·
+⋆          ·  °°          ⋆
+                        ·                                                                      ·       °          ·
+                       ⋆                     🌕🌕🌕🌑🌕🌕🌕🌑🌕🌕🌕🌕🌕🌑                                    ·
+                                                                                                                      °
+        ·                                                                                                           ·
+                     ·                  ·                            ·             ·         ·    ·
+                  ·                           ·
+                            ·                                               · ·
+                                                                                                         ·
+   ·                 ·                     ·       · ·
+                  ·                                                      ·     ·                      °         ⋆     ·
+               °               ·                                             · ·                              °
+                                         [ctrl+c to stop, gnhf again to resume]
