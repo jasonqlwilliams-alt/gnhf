@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.1.44](https://github.com/jasonqlwilliams-alt/gnhf/compare/gnhf-v0.1.43...gnhf-v0.1.44) (2026-09-18)
+
+
+### Features
+
+* add Cursor agent, model selection, and usage-limit waits ([8b2c85b](https://github.com/jasonqlwilliams-alt/gnhf/commit/8b2c85b258478dc613af83e9c55a97cfcae2e5fe))
+* **agents:** add native Cursor CLI support ([#203](https://github.com/jasonqlwilliams-alt/gnhf/issues/203)) ([06ae1cf](https://github.com/jasonqlwilliams-alt/gnhf/commit/06ae1cf025704fe3ca669983b0a68b8dbb99c23b))
+* **cli:** support per-agent model selection ([#225](https://github.com/jasonqlwilliams-alt/gnhf/issues/225)) ([33d89fb](https://github.com/jasonqlwilliams-alt/gnhf/commit/33d89fb54795c8d88512e833d50c7e18f01c1eda))
+* **core:** wait for Claude usage-limit reset instead of aborting on rate limits ([#179](https://github.com/jasonqlwilliams-alt/gnhf/issues/179)) ([2e1dd13](https://github.com/jasonqlwilliams-alt/gnhf/commit/2e1dd137e968f3ec81e85ff6b45db8033667e0eb))
+* **renderer:** scroll the local agent todo/log in the TUI ([#12](https://github.com/jasonqlwilliams-alt/gnhf/issues/12)) ([12b6dc2](https://github.com/jasonqlwilliams-alt/gnhf/commit/12b6dc27ff9df04a6b55aa62f4d55d6fceddc7fd))
+* **renderer:** unfold the live agent log with Ctrl+O ([#11](https://github.com/jasonqlwilliams-alt/gnhf/issues/11)) ([a36de9d](https://github.com/jasonqlwilliams-alt/gnhf/commit/a36de9dc6649436beec3b4f02b6302240da55758))
+
+
+### Bug Fixes
+
+* **agents:** pin Copilot exact-session resume to --session-id ([#9](https://github.com/jasonqlwilliams-alt/gnhf/issues/9)) ([fd36c24](https://github.com/jasonqlwilliams-alt/gnhf/commit/fd36c24aabf5295eb1cac71510bb738583c251c1))
+* **agents:** recover empty Copilot finals with --session-id ([#10](https://github.com/jasonqlwilliams-alt/gnhf/issues/10)) ([13e360a](https://github.com/jasonqlwilliams-alt/gnhf/commit/13e360aa2025469e7fbc9a00e1b1a4fec99bec39))
+* **agents:** recover empty final answers with one same-session nudge ([#8](https://github.com/jasonqlwilliams-alt/gnhf/issues/8)) ([c4c2e6a](https://github.com/jasonqlwilliams-alt/gnhf/commit/c4c2e6aaf0e3d4dc0888ace6d37b7a402d045d44))
+* **agents:** recover wrapped Pi JSON output ([#195](https://github.com/jasonqlwilliams-alt/gnhf/issues/195)) ([f47d916](https://github.com/jasonqlwilliams-alt/gnhf/commit/f47d916fd3d98d6784305fca3931c77c6e068121))
+* **agents:** refuse host-wide Node kills on Windows Claude ([#6](https://github.com/jasonqlwilliams-alt/gnhf/issues/6)) ([43a4481](https://github.com/jasonqlwilliams-alt/gnhf/commit/43a448123021822ea9e21c1a951c0dcd045e5c1e))
+* **agents:** surface Claude CLI exit errors ([#190](https://github.com/jasonqlwilliams-alt/gnhf/issues/190)) ([3041614](https://github.com/jasonqlwilliams-alt/gnhf/commit/3041614ba7f45fc758eb156716a1343942b4a052))
+* **agents:** surface shared CLI stdout errors ([#202](https://github.com/jasonqlwilliams-alt/gnhf/issues/202)) ([5cc31af](https://github.com/jasonqlwilliams-alt/gnhf/commit/5cc31afd89668ec653d60fd11418625db4d7c5b4))
+* **claude:** surface limit failure state ([#223](https://github.com/jasonqlwilliams-alt/gnhf/issues/223)) ([693f1d5](https://github.com/jasonqlwilliams-alt/gnhf/commit/693f1d564a31fa419c0c0989aad8fb89a48578df))
+* **claude:** surface real error text on non-zero exit ([2aa5f00](https://github.com/jasonqlwilliams-alt/gnhf/commit/2aa5f0046676ccdbcdbba961aa36afe3b3f5535d)), closes [#157](https://github.com/jasonqlwilliams-alt/gnhf/issues/157)
+* **cli:** keep worktrees across Linux sleep re-exec ([1c2344f](https://github.com/jasonqlwilliams-alt/gnhf/commit/1c2344f0cffb4f34fe5d903ed208abd2a64b3f88))
+* **cli:** preserve committed worktrees on forced shutdown ([#189](https://github.com/jasonqlwilliams-alt/gnhf/issues/189)) ([c12cdbf](https://github.com/jasonqlwilliams-alt/gnhf/commit/c12cdbf5834d1b285954f8760ad2400977a57a78))
+* **core:** count cache tokens toward the --max-tokens budget ([#213](https://github.com/jasonqlwilliams-alt/gnhf/issues/213)) ([73b9ed7](https://github.com/jasonqlwilliams-alt/gnhf/commit/73b9ed7039a0ee214c4d3549af6ae8b249d07e4b))
+* **core:** honor pending token abort before success ([#217](https://github.com/jasonqlwilliams-alt/gnhf/issues/217)) ([bf2edd9](https://github.com/jasonqlwilliams-alt/gnhf/commit/bf2edd9aaf89d5cf8085f176edeb9032d0ad3dd6))
+* **core:** make Windows sleep prevention hold the machine awake ([#209](https://github.com/jasonqlwilliams-alt/gnhf/issues/209)) ([b50209a](https://github.com/jasonqlwilliams-alt/gnhf/commit/b50209ae25374034c164ebde66859a32398c1048))
+* **core:** wait for the usage window instead of billing extra usage ([#221](https://github.com/jasonqlwilliams-alt/gnhf/issues/221)) ([1689ace](https://github.com/jasonqlwilliams-alt/gnhf/commit/1689ace19d91db7636a6eef1a8b385495858826d))
+* preserve worktree with commits on force-shutdown ([#167](https://github.com/jasonqlwilliams-alt/gnhf/issues/167)) ([f4b2bd4](https://github.com/jasonqlwilliams-alt/gnhf/commit/f4b2bd41ebe278c4943d0e4d7b9ef228a7b652b9))
+* **renderer:** erase the TUI frame on terminal resize ([#4](https://github.com/jasonqlwilliams-alt/gnhf/issues/4)) ([631da7c](https://github.com/jasonqlwilliams-alt/gnhf/commit/631da7c5b80b204f62b3d82565656c2d6170d65e))
+* **renderer:** strip CSI from lastMessage and refresh on Ctrl+L ([#5](https://github.com/jasonqlwilliams-alt/gnhf/issues/5)) ([979dc08](https://github.com/jasonqlwilliams-alt/gnhf/commit/979dc08ccb8ce69aac1cc08eefe108f2173161aa))
+* **renderer:** wrap the moon strip to the terminal width ([#7](https://github.com/jasonqlwilliams-alt/gnhf/issues/7)) ([c561995](https://github.com/jasonqlwilliams-alt/gnhf/commit/c5619950b748e2630422c9946bfc61661a6d5242))
+
 ## [0.1.43](https://github.com/kunchenguid/gnhf/compare/gnhf-v0.1.42...gnhf-v0.1.43) (2026-07-23)
 
 
