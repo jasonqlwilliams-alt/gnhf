@@ -1303,7 +1303,10 @@ describe("cli", () => {
     );
 
     expect(rendererCtor).toHaveBeenCalledTimes(1);
-    expect(rendererCtor.mock.calls[0]?.[4]).toEqual({ meteorFrequency: 3 });
+    expect(rendererCtor.mock.calls[0]?.[4]).toEqual({
+      meteorFrequency: 3,
+      runDir: stubRunInfo.runDir,
+    });
   });
 
   it("defaults meteor frequency to 3", async () => {
@@ -1318,7 +1321,27 @@ describe("cli", () => {
     });
 
     expect(rendererCtor).toHaveBeenCalledTimes(1);
-    expect(rendererCtor.mock.calls[0]?.[4]).toEqual({ meteorFrequency: 3 });
+    expect(rendererCtor.mock.calls[0]?.[4]).toEqual({
+      meteorFrequency: 3,
+      runDir: stubRunInfo.runDir,
+    });
+  });
+
+  it("passes the local run directory to the renderer for log review", async () => {
+    const { rendererCtor } = await runCliWithMocks(["ship it"], {
+      agent: "claude",
+      agentPathOverride: {},
+      agentModel: {},
+      agentArgsOverride: {},
+      acpRegistryOverrides: {},
+      maxConsecutiveFailures: 3,
+      preventSleep: false,
+    });
+
+    expect(rendererCtor.mock.calls[0]?.[4]).toEqual({
+      meteorFrequency: 3,
+      runDir: stubRunInfo.runDir,
+    });
   });
 
   it("uses codex as the mock mode agent label", async () => {
