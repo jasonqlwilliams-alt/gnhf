@@ -1,0 +1,370 @@
+{
+  "results": {
+    "cases": [
+      {
+        "name": "Stop-Process -Name node -Force",
+        "expect": "deny",
+        "behavior": "deny",
+        "decision": {
+          "behavior": "deny",
+          "message": "Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."
+        },
+        "pass": true
+      },
+      {
+        "name": "Get-Process -Name node | Stop-Process -Force",
+        "expect": "deny",
+        "behavior": "deny",
+        "decision": {
+          "behavior": "deny",
+          "message": "Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."
+        },
+        "pass": true
+      },
+      {
+        "name": "Get-Process node | Stop-Process",
+        "expect": "deny",
+        "behavior": "deny",
+        "decision": {
+          "behavior": "deny",
+          "message": "Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."
+        },
+        "pass": true
+      },
+      {
+        "name": "taskkill /IM node.exe",
+        "expect": "deny",
+        "behavior": "deny",
+        "decision": {
+          "behavior": "deny",
+          "message": "Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."
+        },
+        "pass": true
+      },
+      {
+        "name": "taskkill /F /T /IM node.exe",
+        "expect": "deny",
+        "behavior": "deny",
+        "decision": {
+          "behavior": "deny",
+          "message": "Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."
+        },
+        "pass": true
+      },
+      {
+        "name": "powershell -Command Stop-Process -Name node",
+        "expect": "deny",
+        "behavior": "deny",
+        "decision": {
+          "behavior": "deny",
+          "message": "Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."
+        },
+        "pass": true
+      },
+      {
+        "name": "wmic process where name=node.exe call terminate",
+        "expect": "deny",
+        "behavior": "deny",
+        "decision": {
+          "behavior": "deny",
+          "message": "Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."
+        },
+        "pass": true
+      },
+      {
+        "name": "pkill node",
+        "expect": "deny",
+        "behavior": "deny",
+        "decision": {
+          "behavior": "deny",
+          "message": "Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."
+        },
+        "pass": true
+      },
+      {
+        "name": "Stop-Process -Name npm",
+        "expect": "deny",
+        "behavior": "deny",
+        "decision": {
+          "behavior": "deny",
+          "message": "Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."
+        },
+        "pass": true
+      },
+      {
+        "name": "PID-scoped taskkill /T /F /PID 5678",
+        "expect": "allow",
+        "behavior": "allow",
+        "decision": {
+          "behavior": "allow",
+          "updatedInput": {
+            "command": "taskkill /T /F /PID 5678"
+          }
+        },
+        "pass": true
+      },
+      {
+        "name": "Edit src/app.ts",
+        "expect": "allow",
+        "behavior": "allow",
+        "decision": {
+          "behavior": "allow",
+          "updatedInput": {
+            "file_path": "src/app.ts",
+            "old_string": "a",
+            "new_string": "b"
+          }
+        },
+        "pass": true
+      },
+      {
+        "name": "npm test",
+        "expect": "allow",
+        "behavior": "allow",
+        "decision": {
+          "behavior": "allow",
+          "updatedInput": {
+            "command": "npm test"
+          }
+        },
+        "pass": true
+      },
+      {
+        "name": "Stop-Process -Name chrome",
+        "expect": "allow",
+        "behavior": "allow",
+        "decision": {
+          "behavior": "allow",
+          "updatedInput": {
+            "command": "Stop-Process -Name chrome"
+          }
+        },
+        "pass": true
+      }
+    ],
+    "worktree": {
+      "absoluteFromSibling": {
+        "script": "/home/jason/.no-mistakes/worktrees/81d474556c1c/01M2TVXASV707JA24F5V8QJWMJ/dist/cli.mjs",
+        "cwd": "/tmp/gnhf-sibling-worktree",
+        "absolute": true,
+        "exit": 0,
+        "server": {
+          "name": "gnhf_permissions"
+        },
+        "pass": true
+      },
+      "relativeFromSibling": {
+        "script": "dist/cli.mjs",
+        "cwd": "/tmp/gnhf-sibling-worktree",
+        "started": true,
+        "error": null,
+        "code": 1,
+        "stdout": "",
+        "stderr": "node:internal/modules/cjs/loader:1413\n  throw err;\n  ^\n\nError: Cannot find module '/tmp/gnhf-sibling-worktree/dist/cli.mjs'\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1410:15)\n    at defaultResolveImpl (node:internal/modules/cjs/loader:1051:19)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1056:22)\n    at Module._load (node:internal/modules/cjs/loader:1219:37)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:238:24)\n    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)\n    at node:internal/main/run_main_module:33:47 {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: []\n}\n\nNode.js v24.5.0\n",
+        "pass": true
+      }
+    },
+    "ok": true
+  },
+  "rawMessages": [
+    {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {
+          "tools": {}
+        },
+        "serverInfo": {
+          "name": "gnhf_permissions"
+        }
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+        "tools": [
+          {
+            "name": "permission_prompt",
+            "description": "Approve or deny Claude Code tool calls for unattended gnhf runs",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "tool_name": {
+                  "type": "string"
+                },
+                "input": {
+                  "type": "object"
+                },
+                "tool_use_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "tool_name",
+                "input"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 10,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"behavior\":\"deny\",\"message\":\"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf.\"}"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 11,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"behavior\":\"deny\",\"message\":\"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf.\"}"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 12,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"behavior\":\"deny\",\"message\":\"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf.\"}"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 13,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"behavior\":\"deny\",\"message\":\"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf.\"}"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 14,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"behavior\":\"deny\",\"message\":\"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf.\"}"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 15,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"behavior\":\"deny\",\"message\":\"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf.\"}"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 16,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"behavior\":\"deny\",\"message\":\"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf.\"}"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 17,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"behavior\":\"deny\",\"message\":\"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf.\"}"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 18,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"behavior\":\"deny\",\"message\":\"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf.\"}"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 19,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"behavior\":\"allow\",\"updatedInput\":{\"command\":\"taskkill /T /F /PID 5678\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 20,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"behavior\":\"allow\",\"updatedInput\":{\"file_path\":\"src/app.ts\",\"old_string\":\"a\",\"new_string\":\"b\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 21,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"behavior\":\"allow\",\"updatedInput\":{\"command\":\"npm test\"}}"
+          }
+        ]
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": 22,
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"behavior\":\"allow\",\"updatedInput\":{\"command\":\"Stop-Process -Name chrome\"}}"
+          }
+        ]
+      }
+    }
+  ]
+}

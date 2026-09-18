@@ -1,0 +1,36 @@
+{
+  "args": [
+    "-p",
+    "live permission-args probe",
+    "--verbose",
+    "--output-format",
+    "stream-json",
+    "--json-schema",
+    "{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\"success\":{\"type\":\"boolean\"},\"summary\":{\"type\":\"string\"},\"key_changes_made\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"key_learnings\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},\"required\":[\"success\",\"summary\",\"key_changes_made\",\"key_learnings\"]}",
+    "--mcp-config",
+    "{\"mcpServers\":{\"gnhf_permissions\":{\"command\":\"/home/jason/.local/share/cursor-agent/versions/2026.09.15-d2fe57e/node\",\"args\":[\"/home/jason/.no-mistakes/worktrees/81d474556c1c/01M2TVXASV707JA24F5V8QJWMJ/node_modules/.pnpm/vitest@4.1.2_@types+node@22.19.15_vite@8.0.10_@types+node@22.19.15_esbuild@0.27.7_tsx@4.21.0_/node_modules/vitest/dist/workers/forks.js\",\"--gnhf-claude-permission-prompt\"]}}}",
+    "--permission-prompt-tool",
+    "mcp__gnhf_permissions__permission_prompt"
+  ],
+  "parsed": {
+    "skipPermissions": false,
+    "permissionPromptTool": "mcp__gnhf_permissions__permission_prompt",
+    "mcpConfig": {
+      "mcpServers": {
+        "gnhf_permissions": {
+          "command": "/home/jason/.local/share/cursor-agent/versions/2026.09.15-d2fe57e/node",
+          "args": [
+            "/home/jason/.no-mistakes/worktrees/81d474556c1c/01M2TVXASV707JA24F5V8QJWMJ/node_modules/.pnpm/vitest@4.1.2_@types+node@22.19.15_vite@8.0.10_@types+node@22.19.15_esbuild@0.27.7_tsx@4.21.0_/node_modules/vitest/dist/workers/forks.js",
+            "--gnhf-claude-permission-prompt"
+          ]
+        }
+      }
+    }
+  },
+  "built": [
+    "--mcp-config",
+    "{\"mcpServers\":{\"gnhf_permissions\":{\"command\":\"/home/jason/.local/share/cursor-agent/versions/2026.09.15-d2fe57e/node\",\"args\":[\"/home/jason/.no-mistakes/worktrees/81d474556c1c/01M2TVXASV707JA24F5V8QJWMJ/dist/cli.mjs\",\"--gnhf-claude-permission-prompt\"]}}}",
+    "--permission-prompt-tool",
+    "mcp__gnhf_permissions__permission_prompt"
+  ]
+}

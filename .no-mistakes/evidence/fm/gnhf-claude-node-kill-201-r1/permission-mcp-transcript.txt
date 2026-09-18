@@ -1,0 +1,42 @@
+# Live MCP session against /home/jason/.no-mistakes/worktrees/81d474556c1c/01M2TVXASV707JA24F5V8QJWMJ/dist/cli.mjs
+exit=0
+initialize.serverInfo={"name":"gnhf_permissions"}
+tools.list=["permission_prompt"]
+PASS deny Stop-Process -Name node -Force -> {"behavior":"deny","message":"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."}
+PASS deny Get-Process -Name node | Stop-Process -Force -> {"behavior":"deny","message":"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."}
+PASS deny Get-Process node | Stop-Process -> {"behavior":"deny","message":"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."}
+PASS deny taskkill /IM node.exe -> {"behavior":"deny","message":"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."}
+PASS deny taskkill /F /T /IM node.exe -> {"behavior":"deny","message":"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."}
+PASS deny powershell -Command Stop-Process -Name node -> {"behavior":"deny","message":"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."}
+PASS deny wmic process where name=node.exe call terminate -> {"behavior":"deny","message":"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."}
+PASS deny pkill node -> {"behavior":"deny","message":"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."}
+PASS deny Stop-Process -Name npm -> {"behavior":"deny","message":"Refusing a host-wide node/npm process kill. Stop only PIDs this iteration started; killing every Node process also kills gnhf."}
+PASS allow PID-scoped taskkill /T /F /PID 5678 -> {"behavior":"allow","updatedInput":{"command":"taskkill /T /F /PID 5678"}}
+PASS allow Edit src/app.ts -> {"behavior":"allow","updatedInput":{"file_path":"src/app.ts","old_string":"a","new_string":"b"}}
+PASS allow npm test -> {"behavior":"allow","updatedInput":{"command":"npm test"}}
+PASS allow Stop-Process -Name chrome -> {"behavior":"allow","updatedInput":{"command":"Stop-Process -Name chrome"}}
+PASS absolute script from sibling cwd starts MCP (exit=0)
+PASS relative dist/cli.mjs from sibling cwd fails to start MCP (code=1, error=node:internal/modules/cjs/loader:1413)
+
+# Relative dist/cli.mjs from sibling worktree cwd
+cwd=/tmp/gnhf-sibling-worktree
+command=node dist/cli.mjs --gnhf-claude-permission-prompt
+exit=1
+node:internal/modules/cjs/loader:1413
+  throw err;
+  ^
+
+Error: Cannot find module '/tmp/gnhf-sibling-worktree/dist/cli.mjs'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1410:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1051:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1056:22)
+    at Module._load (node:internal/modules/cjs/loader:1219:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:238:24)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v24.5.0
