@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { EventEmitter } from "node:events";
+import { resolve } from "node:path";
 
 vi.mock("node:child_process", () => ({
   execFileSync: vi.fn(),
@@ -8,6 +9,11 @@ vi.mock("node:child_process", () => ({
 
 import { execFileSync, spawn } from "node:child_process";
 import { ClaudeAgent } from "./claude.js";
+import {
+  CLAUDE_PERMISSION_MCP_SERVER_NAME,
+  CLAUDE_PERMISSION_PROMPT_FLAG,
+  CLAUDE_PERMISSION_PROMPT_TOOL,
+} from "./claude-permission-prompt.js";
 import {
   PermanentAgentError,
   RateLimitAgentError,
@@ -32,6 +38,22 @@ function createMockProcess() {
 
 function emitLine(proc: ReturnType<typeof createMockProcess>, obj: unknown) {
   proc.stdout.emit("data", Buffer.from(JSON.stringify(obj) + "\n"));
+}
+
+function expectWindowsClaudePermissionDefaults(args: string[]) {
+  expect(args).not.toContain("--dangerously-skip-permissions");
+  const toolIndex = args.indexOf("--permission-prompt-tool");
+  expect(toolIndex).toBeGreaterThan(-1);
+  expect(args[toolIndex + 1]).toBe(CLAUDE_PERMISSION_PROMPT_TOOL);
+  const mcpIndex = args.indexOf("--mcp-config");
+  expect(mcpIndex).toBeGreaterThan(-1);
+  const config = JSON.parse(args[mcpIndex + 1]!) as {
+    mcpServers: Record<string, { command: string; args: string[] }>;
+  };
+  expect(config.mcpServers[CLAUDE_PERMISSION_MCP_SERVER_NAME]).toEqual({
+    command: process.execPath,
+    args: [resolve(process.argv[1]!), CLAUDE_PERMISSION_PROMPT_FLAG],
+  });
 }
 
 describe("ClaudeAgent", () => {
@@ -81,6 +103,7 @@ describe("ClaudeAgent", () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
     const configuredAgent = new ClaudeAgent({
+      platform: "darwin",
       schema: STOP_SCHEMA,
     });
 
@@ -111,25 +134,37 @@ describe("ClaudeAgent", () => {
 
     windowsAgent.run("test prompt", "/work/dir");
 
-    expect(mockSpawn).toHaveBeenCalledWith(
-      "claude",
-      [
-        "-p",
-        "test prompt",
-        "--verbose",
-        "--output-format",
-        "stream-json",
-        "--json-schema",
-        expect.any(String),
-        "--dangerously-skip-permissions",
-      ],
-      {
-        cwd: "/work/dir",
-        detached: false,
-        shell: false,
-        stdio: ["ignore", "pipe", "pipe"],
-        env: process.env,
-      },
+    const args = mockSpawn.mock.calls[0]![1] as string[];
+    expect(args.slice(0, 7)).toEqual([
+      "-p",
+      "test prompt",
+      "--verbose",
+      "--output-format",
+      "stream-json",
+      "--json-schema",
+      expect.any(String),
+    ]);
+    expectWindowsClaudePermissionDefaults(args);
+    expect(mockSpawn).toHaveBeenCalledWith("claude", args, {
+      cwd: "/work/dir",
+      detached: false,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: process.env,
+    });
+  });
+
+  it("does not skip permissions on Windows when the user did not pass a permission flag", () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const windowsAgent = new ClaudeAgent({
+      platform: "win32",
+    });
+
+    windowsAgent.run("test prompt", "/work/dir");
+
+    expectWindowsClaudePermissionDefaults(
+      mockSpawn.mock.calls[0]![1] as string[],
     );
   });
 
@@ -143,26 +178,15 @@ describe("ClaudeAgent", () => {
 
     windowsAgent.run("test prompt", "/work/dir");
 
-    expect(mockSpawn).toHaveBeenCalledWith(
-      "C:\\tools\\claude.cmd",
-      [
-        "-p",
-        "test prompt",
-        "--verbose",
-        "--output-format",
-        "stream-json",
-        "--json-schema",
-        expect.any(String),
-        "--dangerously-skip-permissions",
-      ],
-      {
-        cwd: "/work/dir",
-        detached: false,
-        shell: true,
-        stdio: ["ignore", "pipe", "pipe"],
-        env: process.env,
-      },
-    );
+    const args = mockSpawn.mock.calls[0]![1] as string[];
+    expectWindowsClaudePermissionDefaults(args);
+    expect(mockSpawn).toHaveBeenCalledWith("C:\\tools\\claude.cmd", args, {
+      cwd: "/work/dir",
+      detached: false,
+      shell: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: process.env,
+    });
   });
 
   it("uses a shell on Windows when a bare override resolves to a cmd wrapper", () => {
@@ -178,26 +202,31 @@ describe("ClaudeAgent", () => {
 
     windowsAgent.run("test prompt", "/work/dir");
 
-    expect(mockSpawn).toHaveBeenCalledWith(
-      "claude-code-switch",
-      [
-        "-p",
-        "test prompt",
-        "--verbose",
-        "--output-format",
-        "stream-json",
-        "--json-schema",
-        expect.any(String),
-        "--dangerously-skip-permissions",
-      ],
-      {
-        cwd: "/work/dir",
-        detached: false,
-        shell: true,
-        stdio: ["ignore", "pipe", "pipe"],
-        env: process.env,
-      },
-    );
+    const args = mockSpawn.mock.calls[0]![1] as string[];
+    expectWindowsClaudePermissionDefaults(args);
+    expect(mockSpawn).toHaveBeenCalledWith("claude-code-switch", args, {
+      cwd: "/work/dir",
+      detached: false,
+      shell: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: process.env,
+    });
+  });
+
+  it("keeps a user-supplied Windows permission mode instead of the Node-kill filter", () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const windowsAgent = new ClaudeAgent({
+      extraArgs: ["--dangerously-skip-permissions"],
+      platform: "win32",
+    });
+
+    windowsAgent.run("test prompt", "/work/dir");
+
+    const args = mockSpawn.mock.calls[0]![1] as string[];
+    expect(args).toContain("--dangerously-skip-permissions");
+    expect(args).not.toContain("--permission-prompt-tool");
+    expect(args).not.toContain("--mcp-config");
   });
 
   it("passes configured extra args through to claude", () => {
@@ -232,6 +261,7 @@ describe("ClaudeAgent", () => {
     mockSpawn.mockReturnValue(proc);
     const configuredAgent = new ClaudeAgent({
       extraArgs: ["--model", "sonnet"],
+      platform: "darwin",
     });
 
     configuredAgent.run("test prompt", "/work/dir", { model: "haiku" });
@@ -257,7 +287,10 @@ describe("ClaudeAgent", () => {
   it("uses the configured model as the default and lets a per-run override win", () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
-    const configuredAgent = new ClaudeAgent({ model: "sonnet" });
+    const configuredAgent = new ClaudeAgent({
+      model: "sonnet",
+      platform: "darwin",
+    });
 
     configuredAgent.run("test prompt", "/work/dir");
 

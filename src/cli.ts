@@ -66,6 +66,10 @@ import { MockOrchestrator } from "./mock-orchestrator.js";
 import { Renderer } from "./renderer.js";
 import { slugifyPrompt } from "./utils/slugify.js";
 import { getTotalTokenCount } from "./utils/tokens.js";
+import {
+  CLAUDE_PERMISSION_PROMPT_FLAG,
+  runClaudePermissionPromptMcp,
+} from "./core/agents/claude-permission-prompt.js";
 
 const packageVersion = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
@@ -1360,6 +1364,11 @@ function exitAltScreen() {
 function die(message: string): never {
   console.error(`\n  gnhf: ${humanizeErrorMessage(message)}\n`);
   process.exit(1);
+}
+
+if (process.argv.includes(CLAUDE_PERMISSION_PROMPT_FLAG)) {
+  await runClaudePermissionPromptMcp();
+  process.exit(0);
 }
 
 try {
