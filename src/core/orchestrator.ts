@@ -2,9 +2,11 @@ import { EventEmitter } from "node:events";
 import { join } from "node:path";
 import {
   PermanentAgentError,
+  RateLimitAgentError,
   type Agent,
   type AgentOutput,
   type TokenUsage,
+  type UsageOverage,
 } from "./agents/types.js";
 import { redactAgentSpecForLogs, type Config } from "./config.js";
 import type { RunInfo } from "./run.js";
@@ -27,6 +29,7 @@ import {
 } from "./interrupt-state.js";
 import { buildCommitMessage } from "./commit-message.js";
 import { buildIterationPrompt } from "../templates/iteration-prompt.js";
+import { getTotalTokenCount } from "../utils/tokens.js";
 
 export interface IterationRecord {
   number: number;
@@ -46,6 +49,8 @@ export interface OrchestratorState {
   currentIteration: number;
   totalInputTokens: number;
   totalOutputTokens: number;
+  totalCacheReadTokens: number;
+  totalCacheCreationTokens: number;
   // Sticky flag: true when at least one iteration's usage was reported as
   // estimated (e.g. an ACP adapter that doesn't emit usage_update). Once set,
   // it stays set for the rest of the run so totals are presented honestly.
@@ -72,13 +77,37 @@ export interface OrchestratorEvents {
 }
 
 export interface RunLimits {
+  fallbackModel?: string;
   maxIterations?: number;
   maxTokens?: number;
+  maxRateLimitWaitMs?: number;
   stopWhen?: string;
   push?: boolean;
 }
 
 const STOP_CLOSE_AGENT_GRACE_MS = 250;
+
+// Resume a rate-limited run a little after the provider-reported reset so
+// clock skew or a still-warming limiter doesn't waste the retry.
+const RATE_LIMIT_RESUME_BUFFER_MS = 60_000;
+// Fallback wait when the reset time is missing or already past, escalating
+// per consecutive rate-limited attempt so a stale reset time can't spin the
+// loop, and bounded so recovery is never far away.
+const RATE_LIMIT_MIN_WAIT_MS = 60_000;
+const RATE_LIMIT_MAX_FALLBACK_WAIT_MS = 30 * 60_000;
+// Cap provider-derived waits well under Node's 2^31-1 ms setTimeout limit -
+// larger delays fire after ~1 ms, turning a far-future reset (e.g. a monthly
+// limit) into a hot retry loop. A capped wait ends before the window actually
+// returns, so resuming on it is a probe: free after a rejection, which re-reads
+// the reset time and self-corrects in daily chunks, but a billed iteration
+// after overage, which fails closed instead.
+const RATE_LIMIT_MAX_WAIT_MS = 24 * 60 * 60_000;
+const DEFAULT_RATE_LIMIT_MAX_WAIT_MS = RATE_LIMIT_MAX_WAIT_MS;
+
+type ProviderResumeWait =
+  | { kind: "none" }
+  | { kind: "elapsed"; resumeAt: Date }
+  | { kind: "wait"; resumeAt: Date; waitMs: number; truncated: boolean };
 
 type RunIterationResult =
   | {
@@ -88,7 +117,8 @@ type RunIterationResult =
       abortReason?: string;
     }
   | { type: "stopped" }
-  | { type: "aborted"; reason: string };
+  | { type: "aborted"; reason: string }
+  | { type: "rate-limited"; resumeAt: Date | null; message: string };
 
 export class Orchestrator extends EventEmitter<OrchestratorEvents> {
   private config: Config;
@@ -104,6 +134,11 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
   private pendingAbortReason: string | null = null;
   private pendingCommitFailure: string | null = null;
   private activeIterationTokensEstimated = false;
+  private activeIterationOverage: UsageOverage | null = null;
+  private fallbackModelActive = false;
+  private fallbackModelUsed = false;
+  private consecutiveRateLimitWaits = 0;
+  private totalRateLimitWaitMs = 0;
   private loopDone = false;
   private stoppedEventEmitted = false;
 
@@ -116,6 +151,8 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
     currentIteration: 0,
     totalInputTokens: 0,
     totalOutputTokens: 0,
+    totalCacheReadTokens: 0,
+    totalCacheCreationTokens: 0,
     tokensEstimated: false,
     commitCount: 0,
     iterations: [],
@@ -144,7 +181,11 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
     this.runInfo = runInfo;
     this.prompt = prompt;
     this.cwd = cwd;
-    this.limits = limits;
+    this.limits = {
+      ...limits,
+      maxRateLimitWaitMs:
+        limits.maxRateLimitWaitMs ?? DEFAULT_RATE_LIMIT_MAX_WAIT_MS,
+    };
     this.state.currentIteration = startIteration;
     this.state.commitCount = getBranchCommitCount(
       this.runInfo.baseCommit,
@@ -254,6 +295,7 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
       startIteration: this.state.currentIteration,
       maxIterations: this.limits.maxIterations,
       maxTokens: this.limits.maxTokens,
+      maxRateLimitWaitMs: this.limits.maxRateLimitWaitMs,
       push: this.limits.push === true,
       maxConsecutiveFailures: this.config.maxConsecutiveFailures,
       baseCommit: this.runInfo.baseCommit,
@@ -319,6 +361,49 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
           break;
         }
 
+        if (result.type === "rate-limited") {
+          if (
+            this.limits.fallbackModel !== undefined &&
+            !this.fallbackModelUsed
+          ) {
+            this.fallbackModelActive = true;
+            this.fallbackModelUsed = true;
+            this.consecutiveRateLimitWaits = 0;
+            this.state.currentIteration--;
+            this.state.lastAgentError = null;
+            this.state.lastMessage = `switching to fallback model ${this.limits.fallbackModel}`;
+            appendDebugLog("rate-limit:fallback-model", {
+              iteration: this.state.currentIteration + 1,
+              model: this.limits.fallbackModel,
+            });
+            this.emit("state", this.getState());
+            continue;
+          }
+          // The attempt did no work; retry under the same iteration number so
+          // rate-limit waits don't consume --max-iterations or the
+          // consecutive-failure budget. A reset time that cannot be waited for
+          // costs only a wasted retry here, so fall back to escalating backoff
+          // and probe again.
+          this.consecutiveRateLimitWaits++;
+          const rejectionWait = this.providerResumeWait(result.resumeAt);
+          const outcome = await this.waitForUsageWindowReset({
+            waitMs:
+              rejectionWait.kind === "wait"
+                ? rejectionWait.waitMs
+                : this.fallbackResumeWaitMs(),
+            resumeAt: result.resumeAt,
+            logPrefix: "rate-limit",
+            message: result.message,
+            rollBackIteration: true,
+            clearAgentErrorOnAbort: false,
+          });
+          if (outcome === "stop") {
+            break;
+          }
+          continue;
+        }
+
+        this.consecutiveRateLimitWaits = 0;
         const { record } = result;
         this.state.iterations.push(record);
         this.emit("iteration:end", record);
@@ -365,6 +450,64 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
             `${this.config.maxConsecutiveFailures} consecutive failures`,
           );
           break;
+        }
+
+        const overage = this.activeIterationOverage;
+        if (overage && !this.stopRequested) {
+          // The included window is spent and the provider is billing extra
+          // usage instead of rejecting. This iteration's work is already
+          // committed, so keep it and wait for the reset rather than buying
+          // the next one. Deciding here, after the post-iteration checks but
+          // before any backoff of gnhf's own, means a run that was going to
+          // stop anyway never sleeps first and a pause we choose to take can
+          // never consume a reset time that was usable when it arrived.
+          // A reset time that has already elapsed says the included window is
+          // back - a long iteration routinely outlives its own reset - so the
+          // run just continues; if the provider is still billing, the next
+          // iteration reports overage again with a fresh reset time. Only a
+          // reset nothing can be done with, none reported or one so far out
+          // the wait would end short of it, leaves probing as the alternative,
+          // and probing buys a billed iteration every time, so those fail
+          // closed.
+          const wait = this.providerResumeWait(overage.resumeAt);
+          if (
+            wait.kind === "none" ||
+            (wait.kind === "wait" && wait.truncated)
+          ) {
+            appendDebugLog("overage:wait:unusable-reset", {
+              iteration: this.state.currentIteration,
+              resumeAt:
+                wait.kind === "none" ? null : wait.resumeAt.toISOString(),
+              truncated: wait.kind === "wait",
+            });
+            this.state.lastAgentError = null;
+            this.abort(
+              `extra usage engaged but ${
+                wait.kind === "none"
+                  ? "no reset time was reported"
+                  : `the reported reset time (${wait.resumeAt.toISOString()}) is further out than a single wait can cover`
+              }`,
+            );
+            break;
+          }
+          if (wait.kind === "elapsed") {
+            appendDebugLog("overage:window-returned", {
+              iteration: this.state.currentIteration,
+              resumeAt: wait.resumeAt.toISOString(),
+            });
+          } else {
+            const outcome = await this.waitForUsageWindowReset({
+              waitMs: wait.waitMs,
+              resumeAt: wait.resumeAt,
+              logPrefix: "overage",
+              message: `extra usage engaged - waiting for the usage window to reset at ${wait.resumeAt.toISOString()}`,
+              rollBackIteration: false,
+              clearAgentErrorOnAbort: true,
+            });
+            if (outcome === "stop") {
+              break;
+            }
+          }
         }
 
         if (this.state.consecutiveErrors > 0 && !this.stopRequested) {
@@ -429,14 +572,21 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
   private async runIteration(prompt: string): Promise<RunIterationResult> {
     const baseInputTokens = this.state.totalInputTokens;
     const baseOutputTokens = this.state.totalOutputTokens;
+    const baseCacheReadTokens = this.state.totalCacheReadTokens;
+    const baseCacheCreationTokens = this.state.totalCacheCreationTokens;
 
     this.activeAbortController = new AbortController();
     this.pendingAbortReason = null;
     this.activeIterationTokensEstimated = false;
+    this.activeIterationOverage = null;
 
     const onUsage = (usage: TokenUsage) => {
       this.state.totalInputTokens = baseInputTokens + usage.inputTokens;
       this.state.totalOutputTokens = baseOutputTokens + usage.outputTokens;
+      this.state.totalCacheReadTokens =
+        baseCacheReadTokens + usage.cacheReadTokens;
+      this.state.totalCacheCreationTokens =
+        baseCacheCreationTokens + usage.cacheCreationTokens;
       this.activeIterationTokensEstimated = usage.estimated === true;
       this.emit("state", this.getState());
 
@@ -456,6 +606,13 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
       this.emit("state", this.getState());
     };
 
+    // Agents report overage out-of-band so it survives a terminal path that
+    // throws: an iteration that failed after the included window was spent
+    // must still pause instead of buying the next one.
+    const onOverage = (overage: UsageOverage | null) => {
+      this.activeIterationOverage = overage;
+    };
+
     const logPath = join(
       this.runInfo.runDir,
       `iteration-${this.state.currentIteration}.jsonl`,
@@ -468,16 +625,35 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
       logPath,
     });
 
+    const fallbackModel = this.fallbackModelActive
+      ? this.limits.fallbackModel
+      : undefined;
+    this.fallbackModelActive = false;
+
     try {
       const result = await this.agent.run(prompt, this.cwd, {
+        ...(fallbackModel === undefined ? {} : { model: fallbackModel }),
         onUsage,
         onMessage,
+        onOverage,
         signal: this.activeAbortController.signal,
         logPath,
       });
 
       this.activeIterationTokensEstimated = false;
       if (result.usage.estimated) this.state.tokensEstimated = true;
+
+      if (this.pendingAbortReason) {
+        appendDebugLog("agent:run:aborted", {
+          iteration: this.state.currentIteration,
+          elapsedMs: Date.now() - agentStartedAt,
+          reason: this.pendingAbortReason,
+        });
+        if (this.pendingCommitFailure === null) {
+          resetHard(this.cwd);
+        }
+        return { type: "aborted", reason: this.pendingAbortReason };
+      }
 
       appendDebugLog("agent:run:end", {
         iteration: this.state.currentIteration,
@@ -559,6 +735,18 @@ export class Orchestrator extends EventEmitter<OrchestratorEvents> {
         elapsedMs,
         error: serializeError(err),
       });
+
+      if (err instanceof RateLimitAgentError) {
+        if (this.pendingCommitFailure === null) {
+          resetHard(this.cwd);
+        }
+        this.state.lastAgentError = err.message;
+        return {
+          type: "rate-limited",
+          resumeAt: err.resumeAt,
+          message: err.message,
+        };
+      }
 
       if (err instanceof PermanentAgentError) {
         if (this.pendingCommitFailure === null) {
@@ -720,6 +908,132 @@ ${this.pendingCommitFailure}
     };
   }
 
+  // Shared pause for both ways a usage window ends. A rejection produced no
+  // work, so its attempt is rolled back and retried under the same iteration
+  // number. An iteration billed to extra usage already committed real work, so
+  // it keeps its number and only the next one waits. On a rejection the
+  // standing `lastAgentError` is the provider's own account of the wait, worth
+  // keeping if the leash aborts; on the overage path it is an unrelated
+  // leftover, so `clearAgentErrorOnAbort` stops it displacing the abort reason.
+  // Returns "stop" when the run must end, either because the wait budget is
+  // spent or a stop arrived.
+  private async waitForUsageWindowReset(options: {
+    waitMs: number;
+    resumeAt: Date | null;
+    logPrefix: string;
+    message: string;
+    rollBackIteration: boolean;
+    clearAgentErrorOnAbort: boolean;
+  }): Promise<"resume" | "stop"> {
+    const {
+      waitMs,
+      resumeAt,
+      logPrefix,
+      message,
+      rollBackIteration,
+      clearAgentErrorOnAbort,
+    } = options;
+    const nextTotalWaitMs = this.totalRateLimitWaitMs + waitMs;
+    const maxRateLimitWaitMs = this.limits.maxRateLimitWaitMs;
+    if (
+      maxRateLimitWaitMs !== undefined &&
+      nextTotalWaitMs > maxRateLimitWaitMs
+    ) {
+      appendDebugLog(`${logPrefix}:wait:aborted`, {
+        iteration: this.state.currentIteration,
+        message,
+        resumeAt: resumeAt?.toISOString() ?? null,
+        waitMs,
+        totalWaitMs: this.totalRateLimitWaitMs,
+        maxRateLimitWaitMs,
+      });
+      if (clearAgentErrorOnAbort) {
+        this.state.lastAgentError = null;
+      }
+      this.abort(
+        `maximum rate-limit wait exceeded (${nextTotalWaitMs}ms > ${maxRateLimitWaitMs}ms)`,
+      );
+      return "stop";
+    }
+    this.totalRateLimitWaitMs = nextTotalWaitMs;
+    if (rollBackIteration) {
+      this.state.currentIteration--;
+    }
+    if (this.stopForGracefulShutdown()) {
+      return "stop";
+    }
+    const logIteration =
+      this.state.currentIteration + (rollBackIteration ? 1 : 0);
+    // Naming the pause is what tells an overage wait apart from an error
+    // backoff in the TUI, but it is a status notice, not an error: it is
+    // restored once the pause ends so it can never be reported as the reason
+    // the run finished.
+    const agentErrorBeforeWait = this.state.lastAgentError ?? null;
+    this.state.status = "waiting";
+    this.state.waitingUntil = new Date(Date.now() + waitMs);
+    this.state.lastAgentError = message;
+    this.emit("state", this.getState());
+
+    appendDebugLog(`${logPrefix}:wait:start`, {
+      iteration: logIteration,
+      message,
+      resumeAt: resumeAt?.toISOString() ?? null,
+      waitMs,
+      consecutiveRateLimitWaits: this.consecutiveRateLimitWaits,
+    });
+
+    try {
+      await this.interruptibleSleep(waitMs);
+    } finally {
+      this.state.lastAgentError = agentErrorBeforeWait;
+    }
+
+    appendDebugLog(`${logPrefix}:wait:end`, {
+      iteration: logIteration,
+      stopRequested: this.stopRequested,
+    });
+
+    this.state.waitingUntil = null;
+    if (this.stopRequested) {
+      return "stop";
+    }
+    if (this.stopForGracefulShutdown()) {
+      return "stop";
+    }
+    this.state.status = "running";
+    this.emit("state", this.getState());
+    return "resume";
+  }
+
+  // The single owner of what a provider-reported reset time is worth. "none"
+  // is no reset time at all; "elapsed" is the provider's own instant saying the
+  // window has already come back, tested against that instant directly rather
+  // than inferred from the wait constants; "wait" carries the sleep to take,
+  // with `truncated` set when the cap ends it short of the reset. Each variant
+  // carries the instant it describes, so callers never re-derive any of this.
+  private providerResumeWait(resumeAt: Date | null): ProviderResumeWait {
+    if (!resumeAt) return { kind: "none" };
+    if (resumeAt.getTime() <= Date.now()) return { kind: "elapsed", resumeAt };
+    const waitMs =
+      resumeAt.getTime() + RATE_LIMIT_RESUME_BUFFER_MS - Date.now();
+    return waitMs > RATE_LIMIT_MAX_WAIT_MS
+      ? {
+          kind: "wait",
+          resumeAt,
+          waitMs: RATE_LIMIT_MAX_WAIT_MS,
+          truncated: true,
+        }
+      : { kind: "wait", resumeAt, waitMs, truncated: false };
+  }
+
+  private fallbackResumeWaitMs(): number {
+    return Math.min(
+      RATE_LIMIT_MIN_WAIT_MS *
+        Math.pow(2, Math.max(0, this.consecutiveRateLimitWaits - 1)),
+      RATE_LIMIT_MAX_FALLBACK_WAIT_MS,
+    );
+  }
+
   private interruptibleSleep(ms: number): Promise<void> {
     return new Promise((resolve) => {
       this.activeAbortController = new AbortController();
@@ -761,8 +1075,12 @@ ${this.pendingCommitFailure}
   private getTokenAbortReason(): string | null {
     if (this.limits.maxTokens === undefined) return null;
 
-    const totalTokens =
-      this.state.totalInputTokens + this.state.totalOutputTokens;
+    const totalTokens = getTotalTokenCount(
+      this.state.totalInputTokens,
+      this.state.totalOutputTokens,
+      this.state.totalCacheReadTokens,
+      this.state.totalCacheCreationTokens,
+    );
     if (totalTokens < this.limits.maxTokens) return null;
 
     return `max tokens reached (${totalTokens}/${this.limits.maxTokens})`;

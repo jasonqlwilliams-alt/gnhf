@@ -67,7 +67,7 @@ gnhf \
   "<worker prompt>"
 ```
 
-If GNHF has no `--model` flag, put model requirements in the worker prompt or backend config. Do not invent unsupported flags.
+Use `--model <model>` to select a model for a run. For config defaults and agent-specific restrictions, follow the README [Configuration](../../README.md#configuration).
 
 Before launch:
 
@@ -149,7 +149,7 @@ Do not ask what to review first. Reconstruct state:
 git status --short
 git branch --show-current
 git log --oneline --decorate --max-count=20
-pgrep -fl 'gnhf|claude|codex|copilot|opencode|rovodev' || true
+pgrep -fl 'gnhf|claude|codex|copilot|cursor-agent|opencode|rovodev' || true
 ```
 
 Inspect likely GNHF branches, notes, logs, terminal sessions, and changed files. If a GNHF process is still running, report that first.

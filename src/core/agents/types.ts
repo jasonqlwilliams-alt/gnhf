@@ -1,3 +1,5 @@
+import { parseAgentJson } from "./json-extract.js";
+
 export interface AgentOutput {
   success: boolean;
   summary: string;
@@ -78,6 +80,33 @@ export function validateAgentOutput(
   return value as unknown as AgentOutput;
 }
 
+export function parseAgentOutput(
+  text: string,
+  schema: AgentOutputSchema,
+  agentLabel: string,
+): AgentOutput {
+  const parsed = parseAgentJson(text, (value) => {
+    try {
+      validateAgentOutput(value, schema);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  if (parsed !== null) {
+    return validateAgentOutput(parsed, schema);
+  }
+
+  const fallbackParsed = parseAgentJson(text);
+  if (fallbackParsed !== null) {
+    return validateAgentOutput(fallbackParsed, schema);
+  }
+
+  throw new SyntaxError(
+    `${agentLabel} output did not contain a parseable JSON object`,
+  );
+}
+
 export interface AgentOutputCommitField {
   name: string;
   allowed?: string[];
@@ -117,6 +146,8 @@ export function buildAgentOutputSchema(opts: {
 }
 
 export interface TokenUsage {
+  // Adapters must keep these buckets mutually exclusive so totals can sum
+  // input, output, cache-read, and cache-write usage without double-counting.
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
@@ -125,6 +156,16 @@ export interface TokenUsage {
   // and the numbers are heuristic estimates. ACP adapters that don't emit
   // usage_update notifications fall into this case.
   estimated?: boolean;
+}
+
+// The provider served this iteration from paid extra usage (Claude "usage
+// credits") because the included window was exhausted. Unlike a rejection the
+// request was still served, so the iteration's work is real and is kept; only
+// the next one waits for the window to reset. Reported through `onOverage`
+// rather than the result, since an iteration can spend the window and still
+// end in an error.
+export interface UsageOverage {
+  resumeAt: Date | null;
 }
 
 export interface AgentResult {
@@ -142,13 +183,38 @@ export class PermanentAgentError extends Error {
   }
 }
 
+// The provider rejected the request because a usage window is exhausted
+// (e.g. the Claude subscription 5-hour window). Unlike retryable errors this
+// carries the provider-reported reset time so the orchestrator can wait for
+// the window to reset instead of burning the consecutive-failure budget.
+export class RateLimitAgentError extends Error {
+  detail: string;
+  resumeAt: Date | null;
+
+  constructor(message: string, detail: string, resumeAt: Date | null) {
+    super(message, { cause: detail });
+    this.name = "RateLimitAgentError";
+    this.detail = detail;
+    this.resumeAt = resumeAt;
+  }
+}
+
 export type OnUsage = (usage: TokenUsage) => void;
 
 export type OnMessage = (text: string) => void;
 
+// Reported out-of-band because overage is orthogonal to how the iteration
+// ends: the window can be spent on an attempt that later fails, and the
+// orchestrator must still wait rather than buy the next iteration. `null`
+// means the provider reported the window recovered.
+export type OnOverage = (overage: UsageOverage | null) => void;
+
 export interface AgentRunOptions {
+  /** Opt-in provider model override for the current iteration. */
+  model?: string;
   onUsage?: OnUsage;
   onMessage?: OnMessage;
+  onOverage?: OnOverage;
   signal?: AbortSignal;
   logPath?: string;
 }

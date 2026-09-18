@@ -8,7 +8,11 @@ vi.mock("node:child_process", () => ({
 
 import { execFileSync, spawn } from "node:child_process";
 import { ClaudeAgent } from "./claude.js";
-import { PermanentAgentError, buildAgentOutputSchema } from "./types.js";
+import {
+  PermanentAgentError,
+  RateLimitAgentError,
+  buildAgentOutputSchema,
+} from "./types.js";
 
 const mockSpawn = vi.mocked(spawn);
 
@@ -221,6 +225,64 @@ describe("ClaudeAgent", () => {
       ],
       expect.any(Object),
     );
+  });
+
+  it("uses an iteration model override after configured args", () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const configuredAgent = new ClaudeAgent({
+      extraArgs: ["--model", "sonnet"],
+    });
+
+    configuredAgent.run("test prompt", "/work/dir", { model: "haiku" });
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      "claude",
+      [
+        "--model",
+        "haiku",
+        "-p",
+        "test prompt",
+        "--verbose",
+        "--output-format",
+        "stream-json",
+        "--json-schema",
+        expect.any(String),
+        "--dangerously-skip-permissions",
+      ],
+      expect.any(Object),
+    );
+  });
+
+  it("uses the configured model as the default and lets a per-run override win", () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+    const configuredAgent = new ClaudeAgent({ model: "sonnet" });
+
+    configuredAgent.run("test prompt", "/work/dir");
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      "claude",
+      [
+        "--model",
+        "sonnet",
+        "-p",
+        "test prompt",
+        "--verbose",
+        "--output-format",
+        "stream-json",
+        "--json-schema",
+        expect.any(String),
+        "--dangerously-skip-permissions",
+      ],
+      expect.any(Object),
+    );
+
+    configuredAgent.run("test prompt", "/work/dir", { model: "haiku" });
+
+    const fallbackArgs = mockSpawn.mock.calls[1]![1] as string[];
+    expect(fallbackArgs).toContain("haiku");
+    expect(fallbackArgs).not.toContain("sonnet");
   });
 
   it("kills the full process tree on Windows when aborted", async () => {
@@ -524,7 +586,7 @@ describe("ClaudeAgent", () => {
       key_learnings: ["b"],
     });
     expect(result.usage).toEqual({
-      inputTokens: 150,
+      inputTokens: 100,
       outputTokens: 200,
       cacheReadTokens: 50,
       cacheCreationTokens: 10,
@@ -551,7 +613,7 @@ describe("ClaudeAgent", () => {
     });
 
     expect(onUsage).toHaveBeenCalledWith({
-      inputTokens: 70,
+      inputTokens: 50,
       outputTokens: 100,
       cacheReadTokens: 20,
       cacheCreationTokens: 5,
@@ -645,25 +707,25 @@ describe("ClaudeAgent", () => {
     await promise;
 
     expect(onUsage).toHaveBeenNthCalledWith(1, {
-      inputTokens: 16,
+      inputTokens: 6,
       outputTokens: 8,
       cacheReadTokens: 10,
       cacheCreationTokens: 3,
     });
     expect(onUsage).toHaveBeenNthCalledWith(2, {
-      inputTokens: 16,
+      inputTokens: 6,
       outputTokens: 8,
       cacheReadTokens: 10,
       cacheCreationTokens: 3,
     });
     expect(onUsage).toHaveBeenNthCalledWith(3, {
-      inputTokens: 37,
+      inputTokens: 7,
       outputTokens: 11,
       cacheReadTokens: 30,
       cacheCreationTokens: 4,
     });
     expect(onUsage).toHaveBeenNthCalledWith(4, {
-      inputTokens: 37,
+      inputTokens: 7,
       outputTokens: 20,
       cacheReadTokens: 30,
       cacheCreationTokens: 4,
@@ -734,25 +796,25 @@ describe("ClaudeAgent", () => {
     await promise;
 
     expect(onUsage).toHaveBeenNthCalledWith(1, {
-      inputTokens: 16,
+      inputTokens: 6,
       outputTokens: 8,
       cacheReadTokens: 10,
       cacheCreationTokens: 3,
     });
     expect(onUsage).toHaveBeenNthCalledWith(2, {
-      inputTokens: 16,
+      inputTokens: 6,
       outputTokens: 8,
       cacheReadTokens: 10,
       cacheCreationTokens: 3,
     });
     expect(onUsage).toHaveBeenNthCalledWith(3, {
-      inputTokens: 37,
+      inputTokens: 7,
       outputTokens: 11,
       cacheReadTokens: 30,
       cacheCreationTokens: 4,
     });
     expect(onUsage).toHaveBeenNthCalledWith(4, {
-      inputTokens: 37,
+      inputTokens: 7,
       outputTokens: 20,
       cacheReadTokens: 30,
       cacheCreationTokens: 4,
@@ -813,19 +875,19 @@ describe("ClaudeAgent", () => {
     await promise;
 
     expect(onUsage).toHaveBeenNthCalledWith(1, {
-      inputTokens: 16,
+      inputTokens: 6,
       outputTokens: 8,
       cacheReadTokens: 10,
       cacheCreationTokens: 3,
     });
     expect(onUsage).toHaveBeenNthCalledWith(2, {
-      inputTokens: 16,
+      inputTokens: 6,
       outputTokens: 10,
       cacheReadTokens: 10,
       cacheCreationTokens: 3,
     });
     expect(onUsage).toHaveBeenNthCalledWith(3, {
-      inputTokens: 16,
+      inputTokens: 6,
       outputTokens: 10,
       cacheReadTokens: 10,
       cacheCreationTokens: 3,
@@ -896,25 +958,25 @@ describe("ClaudeAgent", () => {
     await promise;
 
     expect(onUsage).toHaveBeenNthCalledWith(1, {
-      inputTokens: 16,
+      inputTokens: 6,
       outputTokens: 8,
       cacheReadTokens: 10,
       cacheCreationTokens: 3,
     });
     expect(onUsage).toHaveBeenNthCalledWith(2, {
-      inputTokens: 16,
+      inputTokens: 6,
       outputTokens: 8,
       cacheReadTokens: 10,
       cacheCreationTokens: 3,
     });
     expect(onUsage).toHaveBeenNthCalledWith(3, {
-      inputTokens: 48,
+      inputTokens: 18,
       outputTokens: 24,
       cacheReadTokens: 30,
       cacheCreationTokens: 9,
     });
     expect(onUsage).toHaveBeenNthCalledWith(4, {
-      inputTokens: 48,
+      inputTokens: 18,
       outputTokens: 24,
       cacheReadTokens: 30,
       cacheCreationTokens: 9,
@@ -951,6 +1013,31 @@ describe("ClaudeAgent", () => {
 
     await expect(promise).rejects.toThrow(
       "claude exited with code 1: Invalid model name: claude-nonexistent-5",
+    );
+  });
+
+  it("surfaces a streamed assistant error when the process exits", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    emitLine(proc, {
+      type: "assistant",
+      message: {
+        usage: { input_tokens: 0, output_tokens: 0 },
+        content: [
+          {
+            type: "text",
+            text: "You've hit your session limit · resets 3:40am",
+          },
+        ],
+      },
+    });
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toThrow(
+      "claude exited with code 1: You've hit your session limit · resets 3:40am",
     );
   });
 
@@ -1121,6 +1208,366 @@ describe("ClaudeAgent", () => {
     await expect(promise).rejects.not.toBeInstanceOf(PermanentAgentError);
     await expect(promise).rejects.toThrow(
       "claude exited with code 1: Failed to fetch credit balance: temporary network failure",
+    );
+  });
+
+  it("rejects with RateLimitAgentError when a rejected rate limit precedes a non-zero exit", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    emitLine(proc, {
+      type: "rate_limit_event",
+      rate_limit_info: {
+        status: "rejected",
+        resetsAt: 1784702400,
+        rateLimitType: "five_hour",
+      },
+    });
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toBeInstanceOf(RateLimitAgentError);
+    await expect(promise).rejects.toMatchObject({
+      message: `claude usage limit reached until ${new Date(1784702400 * 1000).toISOString()}`,
+      resumeAt: new Date(1784702400 * 1000),
+    });
+  });
+
+  it("reports overage when the provider bills extra usage instead of rejecting", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const onOverage = vi.fn();
+    const promise = agent.run("prompt", "/cwd", { onOverage });
+
+    // With usage credits enabled the request is served rather than rejected,
+    // so the status stays "allowed" and the flag is the only signal that the
+    // included window is gone.
+    emitLine(proc, {
+      type: "rate_limit_event",
+      rate_limit_info: {
+        status: "allowed",
+        resetsAt: 1784702400,
+        rateLimitType: "five_hour",
+        isUsingOverage: true,
+      },
+    });
+    emitLine(proc, {
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      usage: {
+        input_tokens: 1,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+        output_tokens: 1,
+      },
+      structured_output: {
+        success: true,
+        summary: "done",
+        key_changes_made: [],
+        key_learnings: [],
+      },
+    });
+    proc.emit("close", 0);
+
+    const result = await promise;
+    expect(result.output.success).toBe(true);
+    expect(onOverage).toHaveBeenCalledWith({
+      resumeAt: new Date(1784702400 * 1000),
+    });
+  });
+
+  it("leaves overage unset when the run never touches extra usage", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const onOverage = vi.fn();
+    const promise = agent.run("prompt", "/cwd", { onOverage });
+
+    emitLine(proc, {
+      type: "rate_limit_event",
+      rate_limit_info: { status: "allowed", isUsingOverage: false },
+    });
+    emitLine(proc, {
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      usage: {
+        input_tokens: 1,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+        output_tokens: 1,
+      },
+      structured_output: {
+        success: true,
+        summary: "done",
+        key_changes_made: [],
+        key_learnings: [],
+      },
+    });
+    proc.emit("close", 0);
+
+    await promise;
+    expect(onOverage).toHaveBeenCalledWith(null);
+  });
+
+  it("clears overage when a later event reports the window recovered", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const onOverage = vi.fn();
+    const promise = agent.run("prompt", "/cwd", { onOverage });
+
+    emitLine(proc, {
+      type: "rate_limit_event",
+      rate_limit_info: {
+        status: "allowed",
+        resetsAt: 1784702400,
+        isUsingOverage: true,
+      },
+    });
+    // The window rolled over mid-iteration, so there is nothing left to wait
+    // for and the run should carry straight on.
+    emitLine(proc, {
+      type: "rate_limit_event",
+      rate_limit_info: { status: "allowed", isUsingOverage: false },
+    });
+    emitLine(proc, {
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      usage: {
+        input_tokens: 1,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+        output_tokens: 1,
+      },
+      structured_output: {
+        success: true,
+        summary: "done",
+        key_changes_made: [],
+        key_learnings: [],
+      },
+    });
+    proc.emit("close", 0);
+
+    await promise;
+    expect(onOverage).toHaveBeenLastCalledWith(null);
+  });
+
+  it("reports overage through onOverage when the iteration exits non-zero", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const onOverage = vi.fn();
+    const promise = agent.run("prompt", "/cwd", { onOverage });
+
+    emitLine(proc, {
+      type: "rate_limit_event",
+      rate_limit_info: {
+        status: "allowed",
+        resetsAt: 1784702400,
+        isUsingOverage: true,
+      },
+    });
+    proc.stderr.emit("data", Buffer.from("something broke"));
+    proc.emit("close", 1);
+
+    // The window was still spent, so the failure must not hide the signal:
+    // the next iteration would otherwise be billed to extra usage too.
+    await expect(promise).rejects.toThrow("claude exited with code 1");
+    expect(onOverage).toHaveBeenCalledWith({
+      resumeAt: new Date(1784702400 * 1000),
+    });
+  });
+
+  it("reports overage through onOverage when no structured output arrives", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const onOverage = vi.fn();
+    const promise = agent.run("prompt", "/cwd", { onOverage });
+
+    emitLine(proc, {
+      type: "rate_limit_event",
+      rate_limit_info: {
+        status: "allowed",
+        resetsAt: 1784702400,
+        isUsingOverage: true,
+      },
+    });
+    emitLine(proc, {
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      usage: {
+        input_tokens: 1,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+        output_tokens: 1,
+      },
+    });
+    proc.emit("close", 0);
+
+    await expect(promise).rejects.toThrow("no structured_output");
+    expect(onOverage).toHaveBeenCalledWith({
+      resumeAt: new Date(1784702400 * 1000),
+    });
+  });
+
+  it("reports no overage through onOverage for an untouched window", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const onOverage = vi.fn();
+    const promise = agent.run("prompt", "/cwd", { onOverage });
+
+    proc.stderr.emit("data", Buffer.from("something broke"));
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toThrow("claude exited with code 1");
+    expect(onOverage).toHaveBeenCalledWith(null);
+  });
+
+  it("keeps a reported reset time when a later overage event omits it", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const onOverage = vi.fn();
+    const promise = agent.run("prompt", "/cwd", { onOverage });
+
+    emitLine(proc, {
+      type: "rate_limit_event",
+      rate_limit_info: {
+        status: "allowed",
+        resetsAt: 1784702400,
+        isUsingOverage: true,
+      },
+    });
+    // Still in overage, just without a repeated reset time - the run already
+    // knows when the window returns and must not fail closed on that.
+    emitLine(proc, {
+      type: "rate_limit_event",
+      rate_limit_info: { status: "allowed", isUsingOverage: true },
+    });
+    emitLine(proc, {
+      type: "result",
+      subtype: "success",
+      is_error: false,
+      usage: {
+        input_tokens: 1,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+        output_tokens: 1,
+      },
+      structured_output: {
+        success: true,
+        summary: "done",
+        key_changes_made: [],
+        key_learnings: [],
+      },
+    });
+    proc.emit("close", 0);
+
+    await promise;
+    expect(onOverage).toHaveBeenCalledWith({
+      resumeAt: new Date(1784702400 * 1000),
+    });
+  });
+
+  it("includes the synthetic result message in exit error details", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    emitLine(proc, {
+      type: "rate_limit_event",
+      rate_limit_info: { status: "rejected", resetsAt: 1784702400 },
+    });
+    emitLine(proc, {
+      type: "assistant",
+      message: {
+        usage: { input_tokens: 0, output_tokens: 0 },
+        content: [],
+      },
+    });
+    emitLine(proc, {
+      type: "result",
+      subtype: "success",
+      is_error: true,
+      result: "You've hit your org's monthly spend limit",
+      total_cost_usd: 0,
+      usage: {
+        input_tokens: 0,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+        output_tokens: 0,
+      },
+      structured_output: null,
+    });
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.toMatchObject({
+      detail:
+        "claude exited with code 1: You've hit your org's monthly spend limit",
+    });
+  });
+
+  it("rejects with RateLimitAgentError when the terminal result is a rate-limited error", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    emitLine(proc, {
+      type: "rate_limit_event",
+      rate_limit_info: { status: "rejected", resetsAt: 1784702400 },
+    });
+    emitLine(proc, {
+      type: "result",
+      subtype: "success",
+      is_error: true,
+      result: "You've hit your org's monthly spend limit",
+      total_cost_usd: 0,
+      usage: {
+        input_tokens: 0,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+        output_tokens: 0,
+      },
+      structured_output: null,
+    });
+    proc.emit("close", 0);
+
+    await expect(promise).rejects.toBeInstanceOf(RateLimitAgentError);
+    await expect(promise).rejects.toMatchObject({
+      resumeAt: new Date(1784702400 * 1000),
+    });
+  });
+
+  it("does not classify a failure as rate-limited after the limiter recovers", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    const promise = agent.run("prompt", "/cwd");
+
+    emitLine(proc, {
+      type: "rate_limit_event",
+      rate_limit_info: { status: "rejected", resetsAt: 1784702400 },
+    });
+    emitLine(proc, {
+      type: "rate_limit_event",
+      rate_limit_info: { status: "allowed" },
+    });
+    proc.stderr.emit("data", Buffer.from("something else broke"));
+    proc.emit("close", 1);
+
+    await expect(promise).rejects.not.toBeInstanceOf(RateLimitAgentError);
+    await expect(promise).rejects.toThrow(
+      "claude exited with code 1: something else broke",
     );
   });
 
@@ -1347,7 +1794,7 @@ describe("ClaudeAgent", () => {
       key_learnings: [],
     });
     expect(result.usage).toEqual({
-      inputTokens: 37,
+      inputTokens: 13,
       outputTokens: 47,
       cacheReadTokens: 24,
       cacheCreationTokens: 6,
@@ -1401,7 +1848,7 @@ describe("ClaudeAgent", () => {
       key_learnings: [],
     });
     expect(result.usage).toEqual({
-      inputTokens: 32,
+      inputTokens: 11,
       outputTokens: 42,
       cacheReadTokens: 21,
       cacheCreationTokens: 5,

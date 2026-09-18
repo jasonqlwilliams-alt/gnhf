@@ -8,20 +8,19 @@ import {
   type AgentResult,
   type AgentRunOptions,
   type TokenUsage,
+  type UsageOverage,
   PermanentAgentError,
+  RateLimitAgentError,
 } from "./types.js";
 import { shutdownChildProcess } from "./managed-process.js";
-import { parseJSONLStream, setupAbortHandler } from "./stream-utils.js";
+import {
+  appendExitOutputTail,
+  describeChildProcessExit,
+  parseJSONLStream,
+  setupAbortHandler,
+} from "./stream-utils.js";
 
 const DEFAULT_FINAL_RESULT_EXIT_GRACE_MS = 15_000;
-/** Upper bound on the stdout tail kept for non-zero-exit error reporting. */
-const MAX_EXIT_OUTPUT_CHARS = 4_000;
-/**
- * Tighter bound on unstructured stdout quoted back in the failure detail: that
- * text lands in notes.md and is replayed in every later iteration prompt.
- */
-const MAX_RAW_TAIL_CHARS = 400;
-const RAW_TAIL_ELISION = "[...truncated, full output in the iteration log] ";
 
 interface ClaudeAssistantEvent {
   type: "assistant";
@@ -40,6 +39,7 @@ interface ClaudeResultEvent {
   type: "result";
   subtype: string;
   is_error?: boolean;
+  result?: string;
   total_cost_usd: number;
   usage: {
     input_tokens: number;
@@ -50,12 +50,29 @@ interface ClaudeResultEvent {
   structured_output: AgentOutput | null;
 }
 
-type ClaudeEvent = ClaudeAssistantEvent | ClaudeResultEvent | { type: string };
+interface ClaudeRateLimitEvent {
+  type: "rate_limit_event";
+  rate_limit_info?: {
+    status?: string;
+    resetsAt?: number;
+    // True once the included window is spent and requests are being billed to
+    // extra usage. The request is still served, so `status` stays "allowed"
+    // and the run only learns the window ended from this flag.
+    isUsingOverage?: boolean;
+  };
+}
+
+type ClaudeEvent =
+  | ClaudeAssistantEvent
+  | ClaudeResultEvent
+  | ClaudeRateLimitEvent
+  | { type: string };
 
 interface ClaudeAgentDeps {
   bin?: string;
   extraArgs?: string[];
   finalResultGraceMs?: number;
+  model?: string;
   platform?: NodeJS.Platform;
   schema?: AgentOutputSchema;
 }
@@ -142,8 +159,15 @@ function buildClaudeArgs(
   prompt: string,
   schema: AgentOutputSchema,
   extraArgs?: string[],
+  model?: string,
 ): string[] {
-  const userArgs = extraArgs ?? [];
+  const userArgs = (extraArgs ?? []).filter(
+    (arg, index, args) =>
+      model === undefined ||
+      (arg !== "--model" &&
+        !arg.startsWith("--model=") &&
+        args[index - 1] !== "--model"),
+  );
   const userSpecifiedPermissionMode = userArgs.some(
     (arg) =>
       arg === "--dangerously-skip-permissions" ||
@@ -155,6 +179,7 @@ function buildClaudeArgs(
 
   return [
     ...userArgs,
+    ...(model === undefined ? [] : ["--model", model]),
     "-p",
     prompt,
     "--verbose",
@@ -173,8 +198,7 @@ function toTokenUsage(usage: {
   cache_creation_input_tokens?: number;
 }): TokenUsage {
   return {
-    inputTokens:
-      (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0),
+    inputTokens: usage.input_tokens ?? 0,
     outputTokens: usage.output_tokens ?? 0,
     cacheReadTokens: usage.cache_read_input_tokens ?? 0,
     cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
@@ -204,101 +228,20 @@ function isPermanentClaudeError(output: string): boolean {
   return /credit balance\s+is\s+too\s+low/i.test(output);
 }
 
-/** Keep only the last `MAX_EXIT_OUTPUT_CHARS` characters so long streams stay bounded. */
-function appendBoundedTail(existing: string, chunk: string): string {
-  const combined = existing + chunk;
-  return combined.length > MAX_EXIT_OUTPUT_CHARS
-    ? combined.slice(combined.length - MAX_EXIT_OUTPUT_CHARS)
-    : combined;
-}
-
-function errorTextFromEvent(event: unknown): string | null {
-  if (!event || typeof event !== "object") return null;
-  const record = event as Record<string, unknown>;
-
-  const error = record.error;
-  if (typeof error === "string" && error.trim()) return error.trim();
-  if (error && typeof error === "object") {
-    const message = (error as Record<string, unknown>).message;
-    if (typeof message === "string" && message.trim()) return message.trim();
-  }
-
-  if (record.is_error === true || record.type === "error") {
-    for (const key of ["result", "message", "subtype"]) {
-      const value = record[key];
-      if (typeof value === "string" && value.trim()) return value.trim();
-    }
-  }
-
-  return null;
-}
-
-/** Quote only the end of unstructured output, marking what was dropped. */
-function elideRawTail(raw: string): string {
-  return raw.length > MAX_RAW_TAIL_CHARS
-    ? `${RAW_TAIL_ELISION}${raw.slice(raw.length - MAX_RAW_TAIL_CHARS)}`
-    : raw;
-}
-
-interface StdoutFailure {
-  /** Error text the CLI itself authored in structured stdout events. */
-  structured: string;
-  /** Text worth reporting: the structured text, or a short raw tail. */
-  reported: string;
-}
-
-/**
- * Pull the CLI's own error text out of its stdout, which is JSONL when the run
- * got far enough to stream events and plain text otherwise. Falls back to a
- * bounded raw tail so the reported detail is never empty when stdout had
- * content.
- */
-function extractStdoutError(stdoutTail: string): StdoutFailure {
-  const messages: string[] = [];
-  for (const line of stdoutTail.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      const message = errorTextFromEvent(JSON.parse(line));
-      if (message) messages.push(message);
-    } catch {
-      // Not JSON: covered by the raw-tail fallback below.
-    }
-  }
-  const structured = messages.join("\n");
-  return {
-    structured,
-    reported: structured || elideRawTail(stdoutTail.trim()),
-  };
-}
-
-interface ExitFailure {
-  detail: string;
-  permanent: boolean;
-}
-
-/**
- * Describe a non-zero exit. `detail` reports everything both streams offered,
- * while `permanent` is decided only from text the CLI itself authored - stderr
- * and structured stdout error fields - so agent output that merely quotes a
- * permanent-failure phrase cannot abort an otherwise retryable run.
- */
-function describeExitFailure(
-  code: number | null,
-  stdoutTail: string,
-  stderr: string,
-): ExitFailure {
-  const trimmedStderr = stderr.trim();
-  const stdoutError = extractStdoutError(stdoutTail);
-  const segments = [trimmedStderr, stdoutError.reported].filter(Boolean);
-  return {
-    detail:
-      segments.length > 0
-        ? `claude exited with code ${code}: ${segments.join("\n")}`
-        : `claude exited with code ${code} and produced no output`,
-    permanent: isPermanentClaudeError(
-      [trimmedStderr, stdoutError.structured].filter(Boolean).join("\n"),
-    ),
-  };
+function buildRateLimitError(
+  resetsAtEpochSeconds: number | null,
+  detail: string,
+): RateLimitAgentError {
+  const resumeAt =
+    resetsAtEpochSeconds === null
+      ? null
+      : new Date(resetsAtEpochSeconds * 1000);
+  const until = resumeAt === null ? "" : ` until ${resumeAt.toISOString()}`;
+  return new RateLimitAgentError(
+    `claude usage limit reached${until}`,
+    detail,
+    resumeAt,
+  );
 }
 
 export class ClaudeAgent implements Agent {
@@ -307,6 +250,7 @@ export class ClaudeAgent implements Agent {
   private bin: string;
   private extraArgs?: string[];
   private finalResultGraceMs: number;
+  private model?: string;
   private platform: NodeJS.Platform;
   private schema: AgentOutputSchema;
 
@@ -316,6 +260,7 @@ export class ClaudeAgent implements Agent {
     this.extraArgs = deps.extraArgs;
     this.finalResultGraceMs =
       deps.finalResultGraceMs ?? DEFAULT_FINAL_RESULT_EXIT_GRACE_MS;
+    this.model = deps.model;
     this.platform = deps.platform ?? process.platform;
     this.schema =
       deps.schema ?? buildAgentOutputSchema({ includeStopField: false });
@@ -326,14 +271,19 @@ export class ClaudeAgent implements Agent {
     cwd: string,
     options?: AgentRunOptions,
   ): Promise<AgentResult> {
-    const { onUsage, onMessage, signal, logPath } = options ?? {};
+    const { onUsage, onMessage, onOverage, signal, logPath } = options ?? {};
 
     return new Promise((resolve, reject) => {
       const logStream = logPath ? createWriteStream(logPath) : null;
 
       const child = spawn(
         this.bin,
-        buildClaudeArgs(prompt, this.schema, this.extraArgs),
+        buildClaudeArgs(
+          prompt,
+          this.schema,
+          this.extraArgs,
+          options?.model ?? this.model,
+        ),
         {
           cwd,
           detached: this.platform !== "win32",
@@ -354,6 +304,10 @@ export class ClaudeAgent implements Agent {
       let resultEvent: ClaudeResultEvent | null = null;
       let finalStructuredResultEvent: ClaudeResultEvent | null = null;
       let latestResultUsage: ClaudeResultEvent["usage"] | null = null;
+      let rateLimitRejected = false;
+      let rateLimitResetsAt: number | null = null;
+      let overageActive = false;
+      let overageResetsAt: number | null = null;
       let finalResultCleanupTimer: ReturnType<typeof setTimeout> | null = null;
       let closedAfterFinalCleanup = false;
       let stderr = "";
@@ -375,7 +329,7 @@ export class ClaudeAgent implements Agent {
       });
 
       child.stdout!.on("data", (data: Buffer) => {
-        stdoutTail = appendBoundedTail(stdoutTail, data.toString());
+        stdoutTail = appendExitOutputTail(stdoutTail, data.toString());
       });
 
       child.on("error", (err) => {
@@ -471,6 +425,37 @@ export class ClaudeAgent implements Agent {
           }
         }
 
+        if (event.type === "rate_limit_event") {
+          const info = (event as ClaudeRateLimitEvent).rate_limit_info;
+          // Overage is orthogonal to the rejection status: when extra usage is
+          // enabled the provider serves the request instead of rejecting it,
+          // so this is the only signal that the included window is gone. Only
+          // an explicit `false` clears it, since an older CLI that never sends
+          // the field must not look like the window recovered.
+          if (info?.isUsingOverage === true) {
+            overageActive = true;
+            // A later overage event without a reset time must not discard a
+            // reset time an earlier one reported: the run would then fail
+            // closed on a value it actually knows.
+            if (typeof info.resetsAt === "number") {
+              overageResetsAt = info.resetsAt;
+            }
+          } else if (info?.isUsingOverage === false) {
+            overageActive = false;
+            overageResetsAt = null;
+          }
+          if (info?.status === "rejected") {
+            rateLimitRejected = true;
+            rateLimitResetsAt =
+              typeof info.resetsAt === "number" ? info.resetsAt : null;
+          } else {
+            // A later allowed event means the limiter recovered; any failure
+            // after this point is not a rate-limit failure.
+            rateLimitRejected = false;
+            rateLimitResetsAt = null;
+          }
+        }
+
         if (event.type === "result") {
           const next = event as ClaudeResultEvent;
           latestResultUsage = next.usage;
@@ -500,10 +485,32 @@ export class ClaudeAgent implements Agent {
           clearTimeout(finalResultCleanupTimer);
         }
         logStream?.end();
+
+        // Report before dispatching so every terminal path carries the
+        // signal. An iteration that ends in an error still spent the window,
+        // and continuing would keep buying extra usage.
+        const overage: UsageOverage | null = overageActive
+          ? {
+              resumeAt:
+                overageResetsAt === null
+                  ? null
+                  : new Date(overageResetsAt * 1000),
+            }
+          : null;
+        onOverage?.(overage);
         if (code !== 0 && !closedAfterFinalCleanup) {
-          const failure = describeExitFailure(code, stdoutTail, stderr);
+          const failure = describeChildProcessExit(
+            "claude",
+            code,
+            stdoutTail,
+            stderr,
+          );
+          if (rateLimitRejected) {
+            reject(buildRateLimitError(rateLimitResetsAt, failure.detail));
+            return;
+          }
           reject(
-            failure.permanent
+            isPermanentClaudeError(failure.errorOutput)
               ? new PermanentAgentError(
                   "claude credit balance too low - see gnhf.log",
                   failure.detail,
@@ -524,11 +531,12 @@ export class ClaudeAgent implements Agent {
           terminalResultEvent.is_error ||
           terminalResultEvent.subtype !== "success"
         ) {
-          reject(
-            new Error(
-              `claude reported error: ${JSON.stringify(terminalResultEvent)}`,
-            ),
-          );
+          const detail = `claude reported error: ${JSON.stringify(terminalResultEvent)}`;
+          if (rateLimitRejected) {
+            reject(buildRateLimitError(rateLimitResetsAt, detail));
+            return;
+          }
+          reject(new Error(detail));
           return;
         }
 

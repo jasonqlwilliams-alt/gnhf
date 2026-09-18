@@ -2,15 +2,13 @@ import { execFileSync, spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import {
   buildAgentOutputSchema,
-  validateAgentOutput,
+  parseAgentOutput,
   type Agent,
-  type AgentOutput,
   type AgentOutputSchema,
   type AgentResult,
   type AgentRunOptions,
   type TokenUsage,
 } from "./types.js";
-import { parseAgentJson } from "./json-extract.js";
 import {
   parseJSONLStream,
   setupAbortHandler,
@@ -36,6 +34,7 @@ type CopilotEvent =
 interface CopilotAgentDeps {
   bin?: string;
   extraArgs?: string[];
+  model?: string;
   platform?: NodeJS.Platform;
   schema?: AgentOutputSchema;
 }
@@ -130,11 +129,13 @@ function buildCopilotArgs(
   prompt: string,
   schema: AgentOutputSchema,
   extraArgs?: string[],
+  model?: string,
 ): string[] {
   const userArgs = extraArgs ?? [];
 
   return [
     ...userArgs,
+    ...(model ? ["--model", model] : []),
     "-p",
     buildCopilotPrompt(prompt, schema),
     "--output-format",
@@ -192,37 +193,12 @@ function usageFromRecord(usage: Record<string, unknown>): TokenUsage | null {
   };
 }
 
-function parseCopilotOutput(
-  text: string,
-  schema: AgentOutputSchema,
-): AgentOutput {
-  const parsed = parseAgentJson(text, (value) => {
-    try {
-      validateAgentOutput(value, schema);
-      return true;
-    } catch {
-      return false;
-    }
-  });
-  if (parsed !== null) {
-    return validateAgentOutput(parsed, schema);
-  }
-
-  const fallbackParsed = parseAgentJson(text);
-  if (fallbackParsed !== null) {
-    return validateAgentOutput(fallbackParsed, schema);
-  }
-
-  throw new SyntaxError(
-    "copilot output did not contain a parseable JSON object",
-  );
-}
-
 export class CopilotAgent implements Agent {
   name = "copilot";
 
   private bin: string;
   private extraArgs?: string[];
+  private model?: string;
   private platform: NodeJS.Platform;
   private schema: AgentOutputSchema;
 
@@ -230,6 +206,7 @@ export class CopilotAgent implements Agent {
     const deps = typeof binOrDeps === "string" ? { bin: binOrDeps } : binOrDeps;
     this.bin = deps.bin ?? "copilot";
     this.extraArgs = deps.extraArgs;
+    this.model = deps.model;
     this.platform = deps.platform ?? process.platform;
     this.schema =
       deps.schema ?? buildAgentOutputSchema({ includeStopField: false });
@@ -247,7 +224,7 @@ export class CopilotAgent implements Agent {
 
       const child = spawn(
         this.bin,
-        buildCopilotArgs(prompt, this.schema, this.extraArgs),
+        buildCopilotArgs(prompt, this.schema, this.extraArgs, this.model),
         {
           cwd,
           shell: shouldUseWindowsShell(this.bin, this.platform),
@@ -307,7 +284,11 @@ export class CopilotAgent implements Agent {
         }
 
         try {
-          const output = parseCopilotOutput(lastAgentMessage, this.schema);
+          const output = parseAgentOutput(
+            lastAgentMessage,
+            this.schema,
+            "copilot",
+          );
           resolve({ output, usage: cumulative });
         } catch (err) {
           reject(

@@ -67,9 +67,10 @@ describe("renderTitle", () => {
 });
 
 describe("renderStats", () => {
-  it("renders elapsed, input tokens, output tokens, and commits", () => {
+  it("renders elapsed, total tokens, input tokens, output tokens, and commits", () => {
     const line = stripAnsi(renderStats("01:23:45", 12400, 8200, 12));
     expect(line).toContain("01:23:45");
+    expect(line).toContain("21K total");
     expect(line).toContain("12K");
     expect(line).toContain("8K");
     expect(line).toContain("12 commits");
@@ -82,6 +83,7 @@ describe("renderStats", () => {
 
   it("prefixes token counts with '~' when usage is estimated", () => {
     const plain = stripAnsi(renderStats("01:23:45", 12400, 8200, 12, true));
+    expect(plain).toContain("~21K total");
     expect(plain).toContain("~12K in");
     expect(plain).toContain("~8K out");
     // The '~' prefix is informational only - commit count is concrete and
@@ -92,6 +94,22 @@ describe("renderStats", () => {
   it("does not prefix tokens when usage is authoritative", () => {
     const plain = stripAnsi(renderStats("01:23:45", 12400, 8200, 12, false));
     expect(plain).not.toContain("~");
+  });
+
+  it("includes cache tokens in the total count", () => {
+    const plain = stripAnsi(renderStats("00:00:10", 2, 3, 1, false, 40, 30));
+    expect(plain).toContain("75 total");
+    expect(plain).toContain("2 in");
+    expect(plain).toContain("3 out");
+  });
+
+  it("keeps high-token stats rows within the content width", () => {
+    const plain = stripAnsi(renderStats("08:07:17", 87_300_000, 860_000, 11));
+
+    expect(plain).toBe(
+      "08:07:17 · 88.2M total · 87.3M in · 860K out · 11 commits",
+    );
+    expect(plain.length).toBeLessThanOrEqual(63);
   });
 });
 
@@ -277,6 +295,8 @@ describe("buildFrame", () => {
       currentIteration: 1,
       totalInputTokens: 0,
       totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
       tokensEstimated: false,
       commitCount: 0,
       iterations: [],
@@ -310,6 +330,8 @@ describe("buildFrame", () => {
       currentIteration: 1,
       totalInputTokens: 0,
       totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
       tokensEstimated: false,
       commitCount: 0,
       iterations: [],
@@ -354,6 +376,8 @@ describe("buildFrame", () => {
       currentIteration: 1,
       totalInputTokens: 0,
       totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
       tokensEstimated: false,
       commitCount: 0,
       iterations: [],
@@ -392,6 +416,8 @@ describe("buildFrame", () => {
       currentIteration: 61,
       totalInputTokens: 0,
       totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
       tokensEstimated: false,
       commitCount: 0,
       iterations: Array.from({ length: 61 }, (_, index) =>
@@ -443,6 +469,8 @@ describe("buildFrame", () => {
       currentIteration: 1,
       totalInputTokens: 500,
       totalOutputTokens: 300,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
       tokensEstimated: false,
       commitCount: 0,
       iterations: [],
@@ -482,6 +510,8 @@ describe("buildFrame", () => {
       currentIteration: 660,
       totalInputTokens: 1200,
       totalOutputTokens: 800,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
       tokensEstimated: false,
       commitCount: 7,
       iterations: Array.from({ length: 660 }, (_, index) =>
@@ -522,6 +552,8 @@ describe("buildFrame", () => {
       currentIteration: 1,
       totalInputTokens: 100,
       totalOutputTokens: 50,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
       tokensEstimated: false,
       commitCount: 1,
       iterations: [createIteration()],
@@ -572,6 +604,8 @@ describe("buildFrame", () => {
       currentIteration: 1,
       totalInputTokens: 0,
       totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
       tokensEstimated: false,
       commitCount: 0,
       iterations: [],
@@ -625,6 +659,8 @@ describe("buildFrame", () => {
       currentIteration: 1,
       totalInputTokens: 0,
       totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
       tokensEstimated: false,
       commitCount: 0,
       iterations: [],
@@ -681,6 +717,8 @@ describe("buildContentCells adaptive height", () => {
     currentIteration: 1,
     totalInputTokens: 100,
     totalOutputTokens: 50,
+    totalCacheReadTokens: 0,
+    totalCacheCreationTokens: 0,
     tokensEstimated: false,
     commitCount: 1,
     iterations: [createIteration()],
@@ -953,6 +991,8 @@ describe("Renderer ctrl+c", () => {
       currentIteration: 1,
       totalInputTokens: 0,
       totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
       tokensEstimated: false,
       commitCount: 0,
       iterations: [],
@@ -988,6 +1028,8 @@ describe("Renderer meteors", () => {
       currentIteration: 1,
       totalInputTokens: 0,
       totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
       tokensEstimated: false,
       commitCount: 0,
       iterations: [],
@@ -1153,6 +1195,8 @@ describe("Renderer terminal title", () => {
     currentIteration: 1,
     totalInputTokens: 12_400,
     totalOutputTokens: 8_200,
+    totalCacheReadTokens: 0,
+    totalCacheCreationTokens: 0,
     tokensEstimated: false,
     commitCount: 12,
     iterations: [createIteration()],
@@ -1183,7 +1227,7 @@ describe("Renderer terminal title", () => {
 
       const titles = extractTerminalTitles(stdoutWrite);
       expect(titles.at(-1)).toMatch(
-        /^gnhf [🌑🌒🌓🌔🌕🌖🌗🌘] · 12K in · 8K out · 12 commits$/u,
+        /^gnhf [🌑🌒🌓🌔🌕🌖🌗🌘] · 21K total · 12K in · 8K out · 12 commits$/u,
       );
 
       renderer.stop();
@@ -1249,7 +1293,7 @@ describe("Renderer terminal title", () => {
       const titles = extractTerminalTitles(stdoutWrite);
       const meaningfulTitles = titles.filter((t: string) => t !== "");
       expect(meaningfulTitles.at(-1)).toBe(
-        "gnhf stopped · 12K in · 8K out · 12 commits",
+        "gnhf stopped · 21K total · 12K in · 8K out · 12 commits",
       );
     } finally {
       restoreStdoutTty();

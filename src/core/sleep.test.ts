@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:child_process", () => ({
@@ -16,6 +17,7 @@ vi.mock("node:child_process", () => ({
 }));
 
 import { spawn } from "node:child_process";
+import { initDebugLog, resetDebugLogForTests } from "./debug-log.js";
 import { startSleepPrevention } from "./sleep.js";
 
 const mockSpawn = vi.mocked(spawn);
@@ -33,10 +35,33 @@ function createChildProcess(pid = 1234): ChildProcess {
   return child as unknown as ChildProcess;
 }
 
+function readDebugLogEvents(
+  logPath: string,
+  event: string,
+): Array<Record<string, unknown>> {
+  return readFileSync(logPath, "utf-8")
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+    .filter((entry) => entry.event === event);
+}
+
+function createWindowsChildProcess(pid = 1234): ChildProcess {
+  const child = createChildProcess(pid) as ChildProcess & {
+    stdout: PassThrough;
+    stderr: PassThrough;
+  };
+  return Object.assign(child, {
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+  });
+}
+
 describe("startSleepPrevention", () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
+    resetDebugLogForTests();
   });
 
   it("starts caffeinate on macOS and returns a cleanup handle", async () => {
@@ -540,9 +565,12 @@ describe("startSleepPrevention", () => {
   });
 
   it("starts a PowerShell helper on Windows", async () => {
-    const child = createChildProcess();
+    const child = createWindowsChildProcess();
     mockSpawn.mockImplementation(() => {
-      queueMicrotask(() => child.emit("spawn"));
+      queueMicrotask(() => {
+        child.emit("spawn");
+        child.stdout?.push("gnhf-sleep-ready\n");
+      });
       return child as never;
     });
 
@@ -569,5 +597,170 @@ describe("startSleepPrevention", () => {
     expect(String(mockSpawn.mock.calls[0]?.[1]?.at(-1))).toContain("\n'@;");
     expect(String(mockSpawn.mock.calls[0]?.[1]?.at(-1))).toContain("42");
     expect(result.type).toBe("active");
+    if (result.type !== "active") return;
+    await expect(result.confirmed).resolves.toBe(true);
+  });
+
+  it("does not wait for the Windows handshake before the run can start", async () => {
+    const child = createWindowsChildProcess();
+    mockSpawn.mockImplementation(() => {
+      queueMicrotask(() => child.emit("spawn"));
+      return child as never;
+    });
+
+    // Resolving before the helper has said anything is the point: the run
+    // must not be blocked behind the PowerShell compile.
+    const result = await startSleepPrevention(["ship it"], {
+      pid: 42,
+      platform: "win32",
+    });
+
+    expect(result.type).toBe("active");
+    if (result.type !== "active") return;
+
+    child.stdout?.push("gnhf-sleep-ready\n");
+    await expect(result.confirmed).resolves.toBe(true);
+  });
+
+  it("records the Windows helper's stderr when it exits before reporting ready", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "gnhf-sleep-"));
+    const logPath = join(tempDir, "gnhf.log");
+    initDebugLog(logPath);
+
+    const child = createWindowsChildProcess();
+    mockSpawn.mockImplementation(() => {
+      queueMicrotask(() => {
+        child.emit("spawn");
+        Object.assign(child, { exitCode: 1 });
+        child.emit("exit", 1, null);
+        // Real pipes deliver their buffered output on a later loop turn,
+        // after "exit" and before "close", so the diagnostic is only
+        // complete once the stream has actually ended.
+        setImmediate(() => {
+          child.stderr?.once("end", () => {
+            child.emit("close", 1, null);
+          });
+          child.stderr?.push('Cannot convert argument "flags"\n');
+          child.stderr?.push(null);
+        });
+      });
+      return child as never;
+    });
+
+    try {
+      const result = await startSleepPrevention(["ship it"], {
+        pid: 42,
+        platform: "win32",
+      });
+
+      expect(result.type).toBe("active");
+      if (result.type !== "active") return;
+      await expect(result.confirmed).resolves.toBe(false);
+
+      const logged = readDebugLogEvents(logPath, "sleep:unavailable");
+      expect(logged).toHaveLength(1);
+      expect(logged[0]).toEqual(
+        expect.objectContaining({
+          command: "powershell.exe",
+          reason: "early-exit",
+          exitCode: 1,
+          stderr: 'Cannot convert argument "flags"',
+        }),
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("reports the Windows helper as unconfirmed when it never reports ready", async () => {
+    vi.useFakeTimers();
+    const tempDir = mkdtempSync(join(tmpdir(), "gnhf-sleep-"));
+    const logPath = join(tempDir, "gnhf.log");
+    initDebugLog(logPath);
+
+    const child = createWindowsChildProcess();
+    mockSpawn.mockImplementation(() => {
+      queueMicrotask(() => child.emit("spawn"));
+      return child as never;
+    });
+
+    try {
+      const result = await startSleepPrevention(["ship it"], {
+        pid: 42,
+        platform: "win32",
+      });
+
+      expect(result.type).toBe("active");
+      if (result.type !== "active") return;
+
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      // The deadline is a reporting deadline: a helper that is only slow to
+      // start must be left alive, or the run loses its inhibitor for good.
+      expect(child.kill).not.toHaveBeenCalled();
+
+      const cleanupPromise = result.cleanup();
+      await vi.advanceTimersByTimeAsync(1_100);
+      await cleanupPromise;
+
+      await expect(result.confirmed).resolves.toBe(false);
+      expect(readDebugLogEvents(logPath, "sleep:unavailable")).toEqual([
+        expect.objectContaining({
+          command: "powershell.exe",
+          reason: "ready-timeout",
+          timeoutMs: 15_000,
+        }),
+      ]);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("still confirms a Windows helper that reports ready after the deadline", async () => {
+    vi.useFakeTimers();
+    const child = createWindowsChildProcess();
+    mockSpawn.mockImplementation(() => {
+      queueMicrotask(() => child.emit("spawn"));
+      return child as never;
+    });
+
+    const result = await startSleepPrevention(["ship it"], {
+      pid: 42,
+      platform: "win32",
+    });
+
+    expect(result.type).toBe("active");
+    if (result.type !== "active") return;
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    child.stdout?.push("gnhf-sleep-ready\n");
+    await vi.advanceTimersByTimeAsync(0);
+
+    await expect(result.confirmed).resolves.toBe(true);
+    expect(child.kill).not.toHaveBeenCalled();
+  });
+
+  it("does not blame a Windows helper that cleanup tore down before it was ready", async () => {
+    vi.useFakeTimers();
+    const child = createWindowsChildProcess();
+    mockSpawn.mockImplementation(() => {
+      queueMicrotask(() => child.emit("spawn"));
+      return child as never;
+    });
+
+    const result = await startSleepPrevention(["ship it"], {
+      pid: 42,
+      platform: "win32",
+    });
+
+    expect(result.type).toBe("active");
+    if (result.type !== "active") return;
+
+    const cleanupPromise = result.cleanup();
+    child.emit("exit", 0, null);
+    await vi.advanceTimersByTimeAsync(1_100);
+    await cleanupPromise;
+
+    await expect(result.confirmed).resolves.toBe(true);
   });
 });

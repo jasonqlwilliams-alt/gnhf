@@ -481,7 +481,9 @@ export class RovoDevAgent implements Agent {
     await this.requestJSON(server, "/v3/set_chat_message", {
       method: "POST",
       sessionId,
-      body: { message: prompt },
+      body: {
+        message: prompt,
+      },
       signal,
     });
   }

@@ -42,7 +42,9 @@ describe("renderExitSummary", () => {
     expect(summary).toContain(
       "iterations      8 total       6 good       2 failed",
     );
-    expect(summary).toContain("tokens          12.4M in      96K out");
+    expect(summary).toContain(
+      "tokens          12.5M total   12.4M in     96K out",
+    );
     expect(summary).toContain(
       "branch diff     6 commits     +1,284       -412",
     );
@@ -65,7 +67,9 @@ describe("renderExitSummary", () => {
       }),
     );
 
-    expect(summary).toContain("tokens          ~12.4M in     ~96K out");
+    expect(summary).toContain(
+      "tokens          ~12.5M total  ~12.4M in    ~96K out",
+    );
   });
 
   it("uses a stopped header for aborted runs", () => {
@@ -98,6 +102,61 @@ describe("renderExitSummary", () => {
     expect(summary).toContain(
       "uncommitted     commit failed; changes were left for repair",
     );
+  });
+
+  it("shows cache token totals when they are present", () => {
+    const summary = stripExitSummaryAnsi(
+      renderExitSummary({
+        ...baseSummary,
+        totalInputTokens: 2,
+        totalOutputTokens: 3,
+        totalCacheReadTokens: 40,
+        totalCacheCreationTokens: 30,
+        color: false,
+      }),
+    );
+
+    expect(summary).toContain(
+      "tokens          75 total      2 in         3 out",
+    );
+    expect(summary).toContain("cache           40 read       30 write");
+  });
+
+  it("warns that the machine may have slept when the inhibitor was never confirmed", () => {
+    const summary = stripExitSummaryAnsi(
+      renderExitSummary({
+        ...baseSummary,
+        sleepPreventionNotice: "unconfirmed",
+        color: false,
+      }),
+    );
+
+    expect(summary).toContain(
+      "sleep           prevention unavailable; this machine may have slept",
+    );
+  });
+
+  it("does not claim the machine may have slept when no inhibitor started", () => {
+    const summary = stripExitSummaryAnsi(
+      renderExitSummary({
+        ...baseSummary,
+        sleepPreventionNotice: "unstarted",
+        color: false,
+      }),
+    );
+
+    expect(summary).toContain(
+      "sleep           prevention could not be started for this run",
+    );
+    expect(summary).not.toContain("may have slept");
+  });
+
+  it("omits the sleep warning when prevention held for the run", () => {
+    const summary = stripExitSummaryAnsi(
+      renderExitSummary({ ...baseSummary, color: false }),
+    );
+
+    expect(summary).not.toContain("prevention unavailable");
   });
 
   it("adds ANSI color when requested", () => {

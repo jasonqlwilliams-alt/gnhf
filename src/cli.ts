@@ -47,6 +47,7 @@ import {
   resumeRun,
   peekRunMetadata,
   getLastIterationNumber,
+  writeRunEndState,
 } from "./core/run.js";
 import { readStdinText } from "./core/stdin.js";
 import { startSleepPrevention } from "./core/sleep.js";
@@ -57,10 +58,14 @@ import {
   type CommitMessageConfig,
 } from "./core/commit-message.js";
 import { Orchestrator } from "./core/orchestrator.js";
-import { renderExitSummary } from "./core/exit-summary.js";
+import {
+  renderExitSummary,
+  type SleepPreventionNotice,
+} from "./core/exit-summary.js";
 import { MockOrchestrator } from "./mock-orchestrator.js";
 import { Renderer } from "./renderer.js";
 import { slugifyPrompt } from "./utils/slugify.js";
+import { getTotalTokenCount } from "./utils/tokens.js";
 
 const packageVersion = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
@@ -96,6 +101,31 @@ function parseNonNegativeInteger(value: string): number {
   return parsed;
 }
 
+function parseDuration(value: string): number {
+  if (value === "0") return 0;
+
+  const match = /^(\d+)(ms|s|m|h|d)$/i.exec(value);
+  if (!match) {
+    throw new InvalidArgumentError(
+      'must be a duration such as "30m", "2h", or "0"',
+    );
+  }
+
+  const amount = Number.parseInt(match[1]!, 10);
+  const multiplier = {
+    ms: 1,
+    s: 1_000,
+    m: 60_000,
+    h: 60 * 60_000,
+    d: 24 * 60 * 60_000,
+  }[match[2]!.toLowerCase()]!;
+  const duration = amount * multiplier;
+  if (!Number.isSafeInteger(duration)) {
+    throw new InvalidArgumentError("must be a safe duration");
+  }
+  return duration;
+}
+
 function parseMeteorFrequency(value: string): number {
   const parsed = parseNonNegativeInteger(value);
   if (parsed > MAX_METEOR_FREQUENCY) {
@@ -112,6 +142,19 @@ function parseOnOffBoolean(value: string): boolean {
   throw new InvalidArgumentError(
     'must be one of: "on", "off", "true", "false"',
   );
+}
+
+function parseModel(value: string): string {
+  const model = value.trim();
+  if (model === "") {
+    throw new InvalidArgumentError("must be a non-empty string");
+  }
+  return model;
+}
+
+function isOpenCodeModel(model: string): boolean {
+  const slashIndex = model.indexOf("/");
+  return slashIndex > 0 && slashIndex < model.length - 1;
 }
 
 function humanizeErrorMessage(message: string): string {
@@ -561,14 +604,28 @@ program
     `Agent to use (${AGENT_NAMES.join(", ")}, or acp:<target-or-command>)`,
   )
   .option(
+    "--model <model>",
+    "Model for the agent; overrides agentModel.<agent> from config",
+    parseModel,
+  )
+  .option(
     "--max-iterations <n>",
     "Abort after N total iterations",
     parseNonNegativeInteger,
   )
   .option(
     "--max-tokens <n>",
-    "Abort after N total input+output tokens",
+    "Abort after N total input+output+cache tokens",
     parseNonNegativeInteger,
+  )
+  .option(
+    "--max-rate-limit-wait <duration>",
+    'Abort after this much total usage-limit wait (e.g. "30m", "2h", or "0")',
+    parseDuration,
+  )
+  .option(
+    "--fallback-model <model>",
+    "Retry a Claude usage-limit rejection with this model instead of waiting",
   )
   .option(
     "--stop-when <condition>",
@@ -606,8 +663,11 @@ program
       promptArg: string | undefined,
       options: {
         agent?: string;
+        model?: string;
         maxIterations?: number;
         maxTokens?: number;
+        maxRateLimitWait?: number;
+        fallbackModel?: string;
         stopWhen?: string;
         preventSleep?: boolean;
         worktree: boolean;
@@ -670,6 +730,31 @@ program
       if (!isAgentSpec(config.agent)) {
         console.error(
           `Unknown agent: ${config.agent}. Use ${AGENT_SPEC_LIST}.`,
+        );
+        process.exit(1);
+      }
+      const nativeAgent = getNativeAgentName(config.agent);
+      if (options.model !== undefined && nativeAgent === undefined) {
+        console.error("--model is not supported with ACP targets.");
+        process.exit(1);
+      }
+      if (
+        options.model !== undefined &&
+        nativeAgent === "opencode" &&
+        !isOpenCodeModel(options.model)
+      ) {
+        console.error("--model for --agent opencode must use provider/model.");
+        process.exit(1);
+      }
+      if (options.model !== undefined && nativeAgent === "rovodev") {
+        console.error(
+          "--model is not supported with --agent rovodev. Set agent.modelId in Rovo Dev settings instead.",
+        );
+        process.exit(1);
+      }
+      if (options.fallbackModel !== undefined && config.agent !== "claude") {
+        console.error(
+          "--fallback-model is only supported with --agent claude.",
         );
         process.exit(1);
       }
@@ -903,6 +988,8 @@ program
       }
 
       let sleepPreventionCleanup: (() => Promise<void>) | null = null;
+      let sleepPreventionConfirmed: Promise<boolean> | null = null;
+      let sleepPreventionNotice: SleepPreventionNotice | undefined;
       if (config.preventSleep) {
         const persistedPrompt =
           promptFromStdin && prompt !== undefined
@@ -921,10 +1008,20 @@ program
             }));
           if (sleepPrevention.type === "reexeced") {
             reexeced = true;
+            // The re-execed child now owns the worktree lifecycle. Do not let
+            // this wrapper process remove it from its exit handler.
+            worktreeCleanup = null;
             process.exit(sleepPrevention.exitCode);
           }
           if (sleepPrevention.type === "active") {
             sleepPreventionCleanup = sleepPrevention.cleanup;
+            sleepPreventionConfirmed = sleepPrevention.confirmed;
+          }
+          if (
+            sleepPrevention.type === "skipped" &&
+            sleepPrevention.reason === "unavailable"
+          ) {
+            sleepPreventionNotice = "unstarted";
           }
         } finally {
           if (!reexeced) {
@@ -959,6 +1056,8 @@ program
         startIteration,
         maxIterations: options.maxIterations,
         maxTokens: options.maxTokens,
+        maxRateLimitWaitMs: options.maxRateLimitWait,
+        fallbackModel: options.fallbackModel,
         stopWhen: effectiveStopWhen,
         commitMessage: effectiveCommitMessage,
         preventSleep: config.preventSleep,
@@ -974,7 +1073,9 @@ program
         gnhfVersion: packageVersion,
       });
 
-      const nativeAgent = getNativeAgentName(config.agent);
+      const model =
+        options.model ??
+        (nativeAgent ? config.agentModel?.[nativeAgent] : undefined);
       const agent = createAgent(
         config.agent,
         runInfo,
@@ -983,6 +1084,7 @@ program
         {
           ...schemaOptions,
           acpRegistryOverrides: config.acpRegistryOverrides,
+          model,
         },
       );
       const orchestrator = new Orchestrator(
@@ -996,6 +1098,12 @@ program
           maxIterations: options.maxIterations,
           maxTokens: options.maxTokens,
           stopWhen: effectiveStopWhen,
+          ...(options.maxRateLimitWait === undefined
+            ? {}
+            : { maxRateLimitWaitMs: options.maxRateLimitWait }),
+          ...(options.fallbackModel === undefined
+            ? {}
+            : { fallbackModel: options.fallbackModel }),
           ...(options.push ? { push: true } : {}),
         },
       );
@@ -1094,6 +1202,9 @@ program
         process.off("SIGINT", handleSigInt);
         process.off("SIGTERM", handleSigTerm);
         await sleepPreventionCleanup?.();
+        if (sleepPreventionConfirmed && !(await sleepPreventionConfirmed)) {
+          sleepPreventionNotice = "unconfirmed";
+        }
       }
 
       {
@@ -1116,17 +1227,35 @@ program
           });
         }
 
+        const abortReason = finalState.lastAgentError ?? finalState.lastMessage;
+        try {
+          writeRunEndState(runInfo, {
+            status: finalState.status,
+            stopCondition: finalState.lastMessage,
+            agentError: finalState.lastAgentError ?? null,
+            iterations: finalState.currentIteration,
+            successCount: finalState.successCount,
+            failCount: finalState.failCount,
+          });
+        } catch (error) {
+          appendDebugLog("run:end-state-error", {
+            error: serializeError(error),
+          });
+        }
+
         const exitSummary = renderExitSummary({
           agentName: redactAgentSpecForLogs(config.agent),
           branchName: finalBranchName,
           elapsedMs: Date.now() - finalState.startTime.getTime(),
           status: finalState.status,
-          abortReason: finalState.lastAgentError ?? finalState.lastMessage,
+          abortReason,
           iterations: finalState.currentIteration,
           successCount: finalState.successCount,
           failCount: finalState.failCount,
           totalInputTokens: finalState.totalInputTokens,
           totalOutputTokens: finalState.totalOutputTokens,
+          totalCacheReadTokens: finalState.totalCacheReadTokens,
+          totalCacheCreationTokens: finalState.totalCacheCreationTokens,
           tokensEstimated: finalState.tokensEstimated,
           commitCount: finalState.commitCount,
           notesPath: runInfo.notesPath,
@@ -1136,6 +1265,7 @@ program
           color: shouldUseColor(),
           terminalColumns: process.stdout.columns,
           hasPendingCommitFailure: finalState.hasPendingCommitFailure,
+          sleepPreventionNotice,
         });
 
         appendDebugLog("run:complete", {
@@ -1146,6 +1276,14 @@ program
           failCount: finalState.failCount,
           totalInputTokens: finalState.totalInputTokens,
           totalOutputTokens: finalState.totalOutputTokens,
+          totalCacheReadTokens: finalState.totalCacheReadTokens,
+          totalCacheCreationTokens: finalState.totalCacheCreationTokens,
+          totalTokens: getTotalTokenCount(
+            finalState.totalInputTokens,
+            finalState.totalOutputTokens,
+            finalState.totalCacheReadTokens,
+            finalState.totalCacheCreationTokens,
+          ),
           commitCount: finalState.commitCount,
           worktreePath,
         });
@@ -1161,6 +1299,14 @@ program
           commit_count: finalState.commitCount,
           total_input_tokens: finalState.totalInputTokens,
           total_output_tokens: finalState.totalOutputTokens,
+          total_cache_read_tokens: finalState.totalCacheReadTokens,
+          total_cache_creation_tokens: finalState.totalCacheCreationTokens,
+          total_tokens: getTotalTokenCount(
+            finalState.totalInputTokens,
+            finalState.totalOutputTokens,
+            finalState.totalCacheReadTokens,
+            finalState.totalCacheCreationTokens,
+          ),
           duration_ms: Date.now() - runStartedAt,
           prevent_sleep: config.preventSleep === true,
           push_each_iteration: options.push === true,
