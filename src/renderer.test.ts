@@ -171,6 +171,17 @@ describe("renderAgentMessage", () => {
     expect(plain).not.toContain("Line four");
   });
 
+  it("unfolds extra lastMessage lines when maxLines is raised", () => {
+    const longMsg =
+      "Line one of the message\nLine two of the message\nLine three of the message\nLine four should be cut";
+    const plain = renderAgentMessage(longMsg, "running", undefined, 8)
+      .map(stripAnsi)
+      .join("\n");
+    expect(plain).toContain("Line one");
+    expect(plain).toContain("Line four should be cut");
+    expect(plain).not.toContain("\u2026");
+  });
+
   it("keeps a trailing wide glyph intact at the message width boundary", () => {
     expect(
       renderAgentMessage(`${"A".repeat(62)}🌕`, "running")
@@ -395,7 +406,9 @@ describe("buildFrame", () => {
     const rawHintLine = lines.at(-2) ?? "";
     const hintLine = stripAnsi(rawHintLine);
 
-    expect(hintLine.trim()).toBe("[ctrl+c to stop, gnhf again to resume]");
+    expect(hintLine.trim()).toBe(
+      "[ctrl+o to expand, ctrl+c to stop, gnhf again to resume]",
+    );
     expect(rawHintLine).toContain("\x1b[2m");
     expect(stripAnsi(lines.at(-1) ?? "").trim()).toBe("");
 
@@ -441,6 +454,47 @@ describe("buildFrame", () => {
 
     expect(stripAnsi(lines.at(-2) ?? "").trim()).toBe(
       "[graceful stop requested, ctrl+c again to force stop, gnhf again to resume]",
+    );
+  });
+
+  it("shows the fold hint when the in-session log is unfolded", () => {
+    const state: OrchestratorState = {
+      status: "running",
+      gracefulStopRequested: false,
+      interruptHint: "resume",
+      currentIteration: 1,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
+      tokensEstimated: false,
+      commitCount: 0,
+      iterations: [],
+      successCount: 0,
+      failCount: 0,
+      consecutiveFailures: 0,
+      consecutiveErrors: 0,
+      startTime: new Date("2026-01-01T00:00:00Z"),
+      waitingUntil: null,
+      lastMessage: "reading files",
+    };
+
+    const frame = buildFrame(
+      "ship it",
+      "claude",
+      state,
+      [],
+      [],
+      [],
+      Date.now(),
+      80,
+      30,
+      true,
+    );
+    const lines = stripCursorHome(frame).split("\n");
+
+    expect(stripAnsi(lines.at(-2) ?? "").trim()).toBe(
+      "[ctrl+o or esc to fold, ctrl+c to stop, gnhf again to resume]",
     );
   });
 
@@ -825,6 +879,88 @@ describe("buildContentCells adaptive height", () => {
     expect(text).toContain("reading files");
     expect(text).toContain("00:01:00");
     expect(rows).toHaveLength(22);
+  });
+
+  it("keeps lastMessage folded to three lines by default and unfolds on request", () => {
+    const longMessage =
+      "Line one of the message\nLine two of the message\nLine three of the message\nLine four should be cut";
+    const folded = toText(
+      buildContentCells(
+        "my prompt",
+        "claude",
+        { ...state, lastMessage: longMessage },
+        "00:01:00",
+        0,
+      ),
+    );
+    expect(folded).toContain("Line one of the message");
+    expect(folded).toContain("\u2026");
+    expect(folded).not.toContain("Line four should be cut");
+
+    const unfolded = toText(
+      buildContentCells(
+        "my prompt",
+        "claude",
+        { ...state, lastMessage: longMessage },
+        "00:01:00",
+        0,
+        undefined,
+        undefined,
+        true,
+      ),
+    );
+    expect(unfolded).toContain("Line four should be cut");
+    expect(unfolded).not.toContain("\u2026");
+  });
+
+  it("keeps an unfolded lastMessage within a 24-row terminal", () => {
+    const lastMessage = Array.from(
+      { length: 30 },
+      (_, index) => `Message line ${index + 1}`,
+    ).join("\n");
+    const unfoldedState = { ...state, lastMessage };
+    const terminalHeight = 24;
+    const availableHeight = terminalHeight - 2;
+
+    const contentRows = buildContentCells(
+      "my prompt",
+      "claude",
+      unfoldedState,
+      "00:01:00",
+      0,
+      availableHeight,
+      undefined,
+      true,
+    );
+    const contentText = toText(contentRows);
+
+    expect(contentRows.length).toBeLessThanOrEqual(availableHeight);
+    expect(contentText).toContain("00:01:00");
+    expect(contentText).toContain("Message line 1");
+    expect(contentText).toContain("Message line 20");
+    expect(contentText).not.toContain("Message line 30");
+
+    const frame = buildFrameCells(
+      "my prompt",
+      "claude",
+      unfoldedState,
+      [],
+      [],
+      [],
+      0,
+      80,
+      terminalHeight,
+      [],
+      [],
+      [],
+      true,
+    );
+    const frameText = frame.map(rowToString).map(stripAnsi).join("\n");
+
+    expect(frame).toHaveLength(terminalHeight);
+    expect(frameText).toContain("ctrl+o or esc to fold");
+    expect(frameText).toContain("Message line 1");
+    expect(frameText).not.toContain("Message line 30");
   });
 
   it("keeps the logo separated from both the eyebrow and prompt", () => {
@@ -1252,6 +1388,169 @@ describe("Renderer ctrl+l", () => {
         .map((args: unknown[]) => String(args[0]))
         .join("");
       expect(hasFullEraseThenRedraw(nextTick)).toBe(false);
+    } finally {
+      renderer.stop();
+      Object.defineProperty(process.stdin, "isTTY", {
+        configurable: true,
+        value: originalIsTTY,
+      });
+      Object.defineProperty(process.stdin, "setRawMode", {
+        configurable: true,
+        value: originalSetRawMode,
+      });
+      process.stdin.resume = originalResume;
+      process.stdin.pause = originalPause;
+      process.stdin.on = originalOn;
+      process.stdin.removeAllListeners = originalRemoveAllListeners;
+      if (originalRows)
+        Object.defineProperty(process.stdout, "rows", originalRows);
+      if (originalColumns)
+        Object.defineProperty(process.stdout, "columns", originalColumns);
+      stdoutWrite.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("Renderer ctrl+o log unfold", () => {
+  const longMessage =
+    "Line one of the message\nLine two of the message\nLine three of the message\nLine four should be cut";
+
+  it("unfolds lastMessage on ctrl+o and folds on the same key or escape without stopping", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    let dataHandler: ((data: Buffer) => void) | null = null;
+    const onInterrupt = vi.fn();
+    const orchestratorStop = vi.fn();
+    const state: OrchestratorState = {
+      status: "running",
+      gracefulStopRequested: false,
+      interruptHint: "resume",
+      currentIteration: 1,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
+      tokensEstimated: false,
+      commitCount: 0,
+      iterations: [],
+      successCount: 0,
+      failCount: 0,
+      consecutiveFailures: 0,
+      consecutiveErrors: 0,
+      startTime: new Date(0),
+      waitingUntil: null,
+      lastMessage: longMessage,
+    };
+    const orchestrator = Object.assign(new EventEmitter(), {
+      getState: vi.fn(() => state),
+      stop: orchestratorStop,
+    }) as unknown as Orchestrator;
+
+    const originalIsTTY = process.stdin.isTTY;
+    const originalSetRawMode = (
+      process.stdin as NodeJS.ReadStream & {
+        setRawMode?: (mode: boolean) => void;
+      }
+    ).setRawMode;
+    const originalResume = process.stdin.resume;
+    const originalPause = process.stdin.pause;
+    const originalOn = process.stdin.on;
+    const originalRemoveAllListeners = process.stdin.removeAllListeners;
+    const originalColumns = Object.getOwnPropertyDescriptor(
+      process.stdout,
+      "columns",
+    );
+    const originalRows = Object.getOwnPropertyDescriptor(
+      process.stdout,
+      "rows",
+    );
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+
+    Object.defineProperty(process.stdin, "isTTY", {
+      configurable: true,
+      value: true,
+    });
+    Object.defineProperty(process.stdin, "setRawMode", {
+      configurable: true,
+      value: vi.fn(() => process.stdin),
+    });
+    process.stdin.resume = vi.fn();
+    process.stdin.pause = vi.fn();
+    process.stdin.on = vi.fn(
+      (event: string, handler: (...args: unknown[]) => void) => {
+        if (event === "data") {
+          dataHandler = handler as (data: Buffer) => void;
+        }
+        return process.stdin;
+      },
+    ) as typeof process.stdin.on;
+    process.stdin.removeAllListeners = vi.fn(() => process.stdin);
+    Object.defineProperty(process.stdout, "columns", {
+      configurable: true,
+      value: 80,
+    });
+    Object.defineProperty(process.stdout, "rows", {
+      configurable: true,
+      value: 40,
+    });
+
+    const renderer = new Renderer(
+      orchestrator,
+      "ship it",
+      "claude",
+      onInterrupt,
+    );
+
+    const sendKey = (code: number) => {
+      (dataHandler as unknown as (data: Buffer) => void)(Buffer.from([code]));
+    };
+
+    const written = (): string =>
+      stripAnsi(
+        stdoutWrite.mock.calls
+          .map((args: unknown[]) => String(args[0]))
+          .join(""),
+      );
+
+    try {
+      renderer.start();
+      expect(dataHandler).not.toBeNull();
+
+      const foldedStart = written();
+      expect(foldedStart).toContain("Line one of the message");
+      expect(foldedStart).not.toContain("Line four should be cut");
+      expect(foldedStart).toContain("ctrl+o to expand");
+      expect(onInterrupt).not.toHaveBeenCalled();
+
+      stdoutWrite.mockClear();
+      sendKey(15);
+      const unfolded = written();
+      expect(unfolded).toContain("Line four should be cut");
+      expect(unfolded).toContain("ctrl+o or esc to fold");
+      expect(onInterrupt).not.toHaveBeenCalled();
+      expect(orchestratorStop).not.toHaveBeenCalled();
+
+      stdoutWrite.mockClear();
+      sendKey(27);
+      const foldedByEscape = written();
+      expect(foldedByEscape).toContain("Line one of the message");
+      expect(foldedByEscape).not.toContain("Line four should be cut");
+      expect(foldedByEscape).toContain("ctrl+o to expand");
+      expect(onInterrupt).not.toHaveBeenCalled();
+
+      stdoutWrite.mockClear();
+      sendKey(15);
+      expect(written()).toContain("Line four should be cut");
+
+      stdoutWrite.mockClear();
+      sendKey(15);
+      const foldedByToggle = written();
+      expect(foldedByToggle).not.toContain("Line four should be cut");
+      expect(foldedByToggle).toContain("ctrl+o to expand");
+      expect(onInterrupt).not.toHaveBeenCalled();
     } finally {
       renderer.stop();
       Object.defineProperty(process.stdin, "isTTY", {

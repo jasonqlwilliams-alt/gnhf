@@ -158,6 +158,7 @@ After installing from npm, the skill is available under the installed package di
 - **Iteration finalization** - agents are expected to finish validation, stop any background processes they started, and only then emit the final JSON result for the iteration
 - **Graceful interrupts** - in the interactive TUI, the first Ctrl+C requests a graceful stop and lets the current iteration finish (or ends backoff early), the second Ctrl+C force-stops immediately, and `SIGTERM` also force-stops immediately
 - **Display refresh** - in the interactive TUI, Ctrl+L erases and redraws the current frame so you can recover a garbled display without interrupting the run
+- **Live log unfold** - in the interactive TUI, Ctrl+O expands the three-line agent pane so you can read more of the live log without stopping the run; press Ctrl+O again or Escape to fold it back
 - **Exit summary** - after shutdown cleanup, gnhf prints a permanent stdout summary with the final branch, elapsed time, iteration and token totals, branch diff stats, notes/debug-log paths, and review commands
 - **Shared memory** - the agent reads `notes.md` (built up from prior iterations) to communicate across iterations
 - **Local run metadata** - gnhf stores prompt, notes, stop conditions, commit-message convention metadata, and a final `end-state.json` sidecar with the exit status, stop condition, agent error, and counters under `.gnhf/runs/`, and ignores it locally, so your branch only contains intentional work

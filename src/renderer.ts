@@ -34,10 +34,16 @@ const TICK_MS = 200;
 const MOON_PHASE_PERIOD = 1600;
 const MAX_MSG_LINES = 3;
 const MAX_MSG_LINE_LEN = CONTENT_WIDTH;
-const RESUME_HINT = "[ctrl+c to stop, gnhf again to resume]";
+const RESUME_HINT = "[ctrl+o to expand, ctrl+c to stop, gnhf again to resume]";
+const UNFOLDED_RESUME_HINT =
+  "[ctrl+o or esc to fold, ctrl+c to stop, gnhf again to resume]";
 const GRACEFUL_STOP_HINT =
   "[graceful stop requested, ctrl+c again to force stop, gnhf again to resume]";
 const DONE_HINT = "[ctrl+c to exit]";
+const CTRL_C = 3;
+const CTRL_L = 12;
+const CTRL_O = 15;
+const ESC = 27;
 
 export type RendererExitReason = "interrupted" | "stopped";
 
@@ -198,20 +204,36 @@ export function renderStatsCells(
   ];
 }
 
+function wrapLineBudget(
+  maxLines: number,
+  usedLines: number,
+): number | undefined {
+  if (!Number.isFinite(maxLines)) return undefined;
+  return Math.max(1, maxLines - usedLines);
+}
+
 export function renderAgentMessageCells(
   message: string | null,
   status: string,
   lastAgentError?: string | null,
+  maxLines = MAX_MSG_LINES,
 ): Cell[][] {
   const displayMessage = message === null ? null : stripAnsi(message);
   const displayError = lastAgentError
     ? stripAnsi(lastAgentError)
     : lastAgentError;
+  const lineCap = Number.isFinite(maxLines) ? maxLines : undefined;
   const lines: string[] = [];
   if (status === "waiting") {
     lines.push("waiting (backoff)...");
     if (displayError) {
-      lines.push(...wordWrap(displayError, MAX_MSG_LINE_LEN, 2));
+      lines.push(
+        ...wordWrap(
+          displayError,
+          MAX_MSG_LINE_LEN,
+          wrapLineBudget(maxLines, 1),
+        ),
+      );
     }
   } else if (status === "aborted" && displayError) {
     lines.push(
@@ -221,13 +243,19 @@ export function renderAgentMessageCells(
         1,
       ),
     );
-    lines.push(...wordWrap(displayError, MAX_MSG_LINE_LEN, 2));
+    lines.push(
+      ...wordWrap(
+        displayError,
+        MAX_MSG_LINE_LEN,
+        wrapLineBudget(maxLines, lines.length),
+      ),
+    );
   } else if (status === "aborted" && !displayMessage) {
     lines.push("max consecutive failures reached");
   } else if (!displayMessage) {
     lines.push("working...");
   } else {
-    const wrapped = wordWrap(displayMessage, MAX_MSG_LINE_LEN, MAX_MSG_LINES);
+    const wrapped = wordWrap(displayMessage, MAX_MSG_LINE_LEN, lineCap);
     for (const wl of wrapped) {
       lines.push(wl);
     }
@@ -294,8 +322,9 @@ export function renderAgentMessage(
   message: string | null,
   status: string,
   lastAgentError?: string | null,
+  maxLines = MAX_MSG_LINES,
 ): string[] {
-  return renderAgentMessageCells(message, status, lastAgentError).map(
+  return renderAgentMessageCells(message, status, lastAgentError, maxLines).map(
     rowToString,
   );
 }
@@ -500,24 +529,38 @@ function centerLineCells(content: Cell[], width: number): Cell[] {
 function renderResumeHintCells(
   width: number,
   interruptHint: OrchestratorState["interruptHint"],
+  messageUnfolded = false,
 ): Cell[] {
   const hint =
     interruptHint === "exit"
       ? DONE_HINT
       : interruptHint === "force-stop"
         ? GRACEFUL_STOP_HINT
-        : RESUME_HINT;
+        : messageUnfolded
+          ? UNFOLDED_RESUME_HINT
+          : RESUME_HINT;
   return centerLineCells(textToCells(hint, "dim"), width);
 }
 
 // ── Build full frame (cell-based) ────────────────────────────
 
+function unfoldedMessageLineCap(availableHeight?: number): number {
+  if (availableHeight == null || !Number.isFinite(availableHeight)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  const reservedStatsRows = 1;
+  return Math.max(MAX_MSG_LINES, availableHeight - reservedStatsRows);
+}
+
 /**
  * Builds the centered content viewport for the renderer.
  *
- * When `availableHeight` is constrained, the layout drops optional sections in
- * priority order (ASCII art, eyebrow, agent message, then prompt) so the stats
- * row remains visible and any remaining space is used for the newest moon rows.
+ * When `availableHeight` is constrained, optional sections drop so the stats
+ * row stays visible and leftover space goes to the newest moon rows. Folded
+ * layout drops ASCII art, eyebrow, agent message, then prompt. Unfolded layout
+ * keeps the agent pane, drops ASCII art, eyebrow, then prompt, caps the
+ * message so stats still fit, and clips leftover non-moon rows to
+ * `availableHeight`.
  */
 export function buildContentCells(
   prompt: string,
@@ -527,6 +570,7 @@ export function buildContentCells(
   now: number,
   availableHeight?: number,
   contentWidth = CONTENT_WIDTH,
+  messageUnfolded = false,
 ): Cell[][] {
   const isRunning = state.status === "running" || state.status === "waiting";
   const moonRows = renderMoonStripCells(
@@ -546,6 +590,10 @@ export function buildContentCells(
     const pl = promptLines[i] ?? "";
     promptRows.push(pl ? textToCells(pl, "dim") : []);
   }
+
+  const maxMsgLines = messageUnfolded
+    ? unfoldedMessageLineCap(availableHeight)
+    : MAX_MSG_LINES;
 
   const sections = {
     top: [[]] as Cell[][],
@@ -570,6 +618,7 @@ export function buildContentCells(
         state.lastMessage,
         state.status,
         state.lastAgentError,
+        maxMsgLines,
       ),
     ],
     moon: [[], [], ...moonRows] as Cell[][],
@@ -585,12 +634,9 @@ export function buildContentCells(
     ...sections.moon,
   ];
 
-  const optionalSections: Array<keyof typeof sections> = [
-    "art",
-    "eyebrow",
-    "agent",
-    "prompt",
-  ];
+  const optionalSections: Array<keyof typeof sections> = messageUnfolded
+    ? ["art", "eyebrow", "prompt"]
+    : ["art", "eyebrow", "agent", "prompt"];
 
   let rows = flattenSections();
   for (const section of optionalSections) {
@@ -611,7 +657,9 @@ export function buildContentCells(
       ...sections.prompt,
       ...sections.stats,
       ...sections.agent,
-    ].filter((row) => row.length > 0);
+    ]
+      .filter((row) => row.length > 0)
+      .slice(0, maxRows);
     const allowedMoonRows = Math.max(0, maxRows - nonMoonRows.length);
     const visibleMoonRows =
       allowedMoonRows === 0
@@ -636,6 +684,7 @@ export function buildFrameCells(
   topMeteors: Meteor[] = [],
   bottomMeteors: Meteor[] = [],
   sideMeteors: Meteor[] = [],
+  messageUnfolded = false,
 ): Cell[][] {
   const elapsed = formatElapsed(now - state.startTime.getTime());
   const reservedBottomRows = 2;
@@ -653,6 +702,7 @@ export function buildFrameCells(
     now,
     availableHeight,
     contentWidth,
+    messageUnfolded,
   );
 
   while (contentRows.length < Math.min(BASE_CONTENT_ROWS, availableHeight)) {
@@ -721,7 +771,9 @@ export function buildFrameCells(
     );
   }
 
-  frame.push(renderResumeHintCells(terminalWidth, state.interruptHint));
+  frame.push(
+    renderResumeHintCells(terminalWidth, state.interruptHint, messageUnfolded),
+  );
   frame.push(emptyCells(terminalWidth));
 
   return frame;
@@ -751,6 +803,7 @@ export function buildFrame(
   now: number,
   terminalWidth: number,
   terminalHeight: number,
+  messageUnfolded = false,
 ): string {
   const cells = buildFrameCells(
     prompt,
@@ -762,6 +815,10 @@ export function buildFrame(
     now,
     terminalWidth,
     terminalHeight,
+    [],
+    [],
+    [],
+    messageUnfolded,
   );
   return "\x1b[H" + cells.map(rowToString).join("\n");
 }
@@ -790,6 +847,7 @@ export class Renderer {
   private titleSaved = false;
   private isFirstFrame = true;
   private needsFullRedraw = false;
+  private messageUnfolded = false;
   private seedTop: number;
   private seedBottom: number;
   private seedSide: number;
@@ -835,11 +893,23 @@ export class Renderer {
       process.stdin.setRawMode(true);
       process.stdin.resume();
       process.stdin.on("data", (data) => {
-        if (data[0] === 3) {
+        if (data[0] === CTRL_C) {
           this.onInterrupt();
           return;
         }
-        if (data[0] === 12) {
+        if (data[0] === CTRL_L) {
+          this.needsFullRedraw = true;
+          this.render();
+          return;
+        }
+        if (data[0] === CTRL_O) {
+          this.messageUnfolded = !this.messageUnfolded;
+          this.needsFullRedraw = true;
+          this.render();
+          return;
+        }
+        if (this.messageUnfolded && data.length === 1 && data[0] === ESC) {
+          this.messageUnfolded = false;
           this.needsFullRedraw = true;
           this.render();
         }
@@ -956,11 +1026,13 @@ export class Renderer {
       this.topMeteors,
       this.bottomMeteors,
       this.sideMeteors,
+      this.messageUnfolded,
     );
 
     if (this.isFirstFrame || resized || this.needsFullRedraw) {
-      // Resize and Ctrl+L must erase the previous frame; cursor-home plus a
-      // rewrite leaves leftover cells from the old size or a desynced write.
+      // Resize, Ctrl+L, and log fold/unfold must erase the previous frame;
+      // cursor-home plus a rewrite leaves leftover cells from the old size
+      // or a taller unfolded log.
       const prefix =
         (resized || this.needsFullRedraw) && !this.isFirstFrame
           ? "\x1b[2J\x1b[H"
