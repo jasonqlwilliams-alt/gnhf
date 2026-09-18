@@ -14,6 +14,11 @@ import {
   setupAbortHandler,
   setupChildProcessHandlers,
 } from "./stream-utils.js";
+import {
+  CopilotEmptyTurnError,
+  copilotExactSessionArgs,
+  extractCopilotSessionId,
+} from "./copilot-session.js";
 
 interface CopilotAssistantMessageEvent {
   type: "assistant.message";
@@ -37,6 +42,7 @@ interface CopilotAgentDeps {
   model?: string;
   platform?: NodeJS.Platform;
   schema?: AgentOutputSchema;
+  sessionId?: string;
 }
 
 function shouldUseWindowsShell(
@@ -130,11 +136,13 @@ function buildCopilotArgs(
   schema: AgentOutputSchema,
   extraArgs?: string[],
   model?: string,
+  sessionId?: string,
 ): string[] {
   const userArgs = extraArgs ?? [];
 
   return [
     ...userArgs,
+    ...(sessionId ? copilotExactSessionArgs(sessionId) : []),
     ...(model ? ["--model", model] : []),
     "-p",
     buildCopilotPrompt(prompt, schema),
@@ -201,6 +209,7 @@ export class CopilotAgent implements Agent {
   private model?: string;
   private platform: NodeJS.Platform;
   private schema: AgentOutputSchema;
+  private sessionId?: string;
 
   constructor(binOrDeps: string | CopilotAgentDeps = {}) {
     const deps = typeof binOrDeps === "string" ? { bin: binOrDeps } : binOrDeps;
@@ -210,6 +219,7 @@ export class CopilotAgent implements Agent {
     this.platform = deps.platform ?? process.platform;
     this.schema =
       deps.schema ?? buildAgentOutputSchema({ includeStopField: false });
+    this.sessionId = deps.sessionId;
   }
 
   run(
@@ -224,7 +234,13 @@ export class CopilotAgent implements Agent {
 
       const child = spawn(
         this.bin,
-        buildCopilotArgs(prompt, this.schema, this.extraArgs, this.model),
+        buildCopilotArgs(
+          prompt,
+          this.schema,
+          this.extraArgs,
+          this.model,
+          this.sessionId,
+        ),
         {
           cwd,
           shell: shouldUseWindowsShell(this.bin, this.platform),
@@ -242,6 +258,7 @@ export class CopilotAgent implements Agent {
       }
 
       let lastAgentMessage: string | null = null;
+      let capturedSessionId: string | null = this.sessionId ?? null;
       const cumulative: TokenUsage = {
         inputTokens: 0,
         outputTokens: 0,
@@ -250,6 +267,11 @@ export class CopilotAgent implements Agent {
       };
 
       parseJSONLStream<CopilotEvent>(child.stdout!, logStream, (event) => {
+        const sessionId = extractCopilotSessionId(event);
+        if (sessionId !== null) {
+          capturedSessionId = sessionId;
+        }
+
         if (event.type === "assistant.message") {
           const data = (event as CopilotAssistantMessageEvent).data;
           if (typeof data.content === "string") {
@@ -279,7 +301,7 @@ export class CopilotAgent implements Agent {
 
       setupChildProcessHandlers(child, "copilot", logStream, reject, () => {
         if (!lastAgentMessage) {
-          reject(new Error("copilot returned no agent message"));
+          reject(new CopilotEmptyTurnError(capturedSessionId));
           return;
         }
 

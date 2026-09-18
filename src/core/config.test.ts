@@ -568,6 +568,26 @@ describe("loadConfig", () => {
     },
   );
 
+  it.each([
+    "--continue",
+    "--resume",
+    "--resume=0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+    "-r",
+    "--session-id",
+    "--session-id=0cb916db-26aa-40f2-86b5-1ba81b225fd2",
+  ])(
+    "throws when agentArgsOverride.copilot contains reserved session flag %s",
+    (flag) => {
+      mockReadFileSync.mockReturnValue(
+        `agentArgsOverride:\n  copilot:\n    - ${flag}\n`,
+      );
+
+      expect(() => loadConfig()).toThrow(
+        /agentArgsOverride\.copilot\[0\].*managed by gnhf/,
+      );
+    },
+  );
+
   it("reads acpRegistryOverrides from config", () => {
     mockReadFileSync.mockReturnValue(
       [
