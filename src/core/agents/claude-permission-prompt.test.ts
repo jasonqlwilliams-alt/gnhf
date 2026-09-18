@@ -23,8 +23,12 @@ describe("buildWindowsClaudePermissionArgs", () => {
       mcpServers: Record<string, { command: string; args: string[] }>;
     };
     const server = config.mcpServers[CLAUDE_PERMISSION_MCP_SERVER_NAME];
+    expect(server).toBeDefined();
+    expect(server?.args).toBeDefined();
+    const scriptPath = server?.args[0];
+    expect(scriptPath).toBeDefined();
+    expect(isAbsolute(scriptPath ?? "")).toBe(true);
     expect(server?.command).toBe(process.execPath);
-    expect(isAbsolute(server?.args[0]!)).toBe(true);
     expect(server?.args).toEqual([
       resolve("dist/cli.mjs"),
       CLAUDE_PERMISSION_PROMPT_FLAG,
