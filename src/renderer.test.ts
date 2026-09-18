@@ -177,6 +177,22 @@ describe("renderAgentMessage", () => {
         .filter(Boolean),
     ).toEqual(["A".repeat(62), "🌕"]);
   });
+
+  it("strips CSI and other control sequences from lastMessage before wrap", () => {
+    const message = `${"\x1b[2J".repeat(50)}reading files\x1b[10;1H\x1b[A\rstuck line`;
+    const raw = renderAgentMessage(message, "running").join("\n");
+    const plain = renderAgentMessage(message, "running")
+      .map(stripAnsi)
+      .join("\n");
+
+    expect(raw).not.toContain("\x1b[2J");
+    expect(raw).not.toContain("\x1b[10;1H");
+    expect(raw).not.toContain("\x1b[A");
+    expect(raw).not.toContain("\r");
+    expect(plain).toContain("reading files");
+    expect(plain).toContain("stuck line");
+    expect(plain).not.toContain("\u2026");
+  });
 });
 
 describe("renderMoonStrip", () => {
@@ -1011,6 +1027,157 @@ describe("Renderer ctrl+c", () => {
     expect(onInterrupt).toHaveBeenCalledTimes(1);
     expect(orchestratorStop).not.toHaveBeenCalled();
     expect(pause).not.toHaveBeenCalled();
+  });
+});
+
+describe("Renderer ctrl+l", () => {
+  const TICK_MS = 200;
+
+  function hasFullEraseThenRedraw(output: string): boolean {
+    const esc = "\u001b";
+    const eraseAt = [
+      output.indexOf(`${esc}[2J${esc}[H`),
+      output.indexOf(`${esc}[H${esc}[J`),
+      output.indexOf(`${esc}[H${esc}[0J`),
+      output.indexOf(`${esc}[J${esc}[H`),
+      output.indexOf(`${esc}[0J${esc}[H`),
+    ].filter((idx) => idx >= 0);
+    if (eraseAt.length === 0) return false;
+    return /[A-Za-z]/.test(output.slice(Math.min(...eraseAt)));
+  }
+
+  it("erases and redraws the frame on ctrl+l without interrupting the run", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    let dataHandler: ((data: Buffer) => void) | null = null;
+    const onInterrupt = vi.fn();
+    const state: OrchestratorState = {
+      status: "running",
+      gracefulStopRequested: false,
+      interruptHint: "resume",
+      currentIteration: 1,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreationTokens: 0,
+      tokensEstimated: false,
+      commitCount: 0,
+      iterations: [],
+      successCount: 0,
+      failCount: 0,
+      consecutiveFailures: 0,
+      consecutiveErrors: 0,
+      startTime: new Date(0),
+      waitingUntil: null,
+      lastMessage: "reading files",
+    };
+    const orchestrator = Object.assign(new EventEmitter(), {
+      getState: vi.fn(() => state),
+      stop: vi.fn(),
+    }) as unknown as Orchestrator;
+
+    const originalIsTTY = process.stdin.isTTY;
+    const originalSetRawMode = (
+      process.stdin as NodeJS.ReadStream & {
+        setRawMode?: (mode: boolean) => void;
+      }
+    ).setRawMode;
+    const originalResume = process.stdin.resume;
+    const originalPause = process.stdin.pause;
+    const originalOn = process.stdin.on;
+    const originalRemoveAllListeners = process.stdin.removeAllListeners;
+    const originalColumns = Object.getOwnPropertyDescriptor(
+      process.stdout,
+      "columns",
+    );
+    const originalRows = Object.getOwnPropertyDescriptor(
+      process.stdout,
+      "rows",
+    );
+    const stdoutWrite = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+
+    Object.defineProperty(process.stdin, "isTTY", {
+      configurable: true,
+      value: true,
+    });
+    Object.defineProperty(process.stdin, "setRawMode", {
+      configurable: true,
+      value: vi.fn(() => process.stdin),
+    });
+    process.stdin.resume = vi.fn();
+    process.stdin.pause = vi.fn();
+    process.stdin.on = vi.fn(
+      (event: string, handler: (...args: unknown[]) => void) => {
+        if (event === "data") {
+          dataHandler = handler as (data: Buffer) => void;
+        }
+        return process.stdin;
+      },
+    ) as typeof process.stdin.on;
+    process.stdin.removeAllListeners = vi.fn(() => process.stdin);
+    Object.defineProperty(process.stdout, "columns", {
+      configurable: true,
+      value: 80,
+    });
+    Object.defineProperty(process.stdout, "rows", {
+      configurable: true,
+      value: 24,
+    });
+
+    const renderer = new Renderer(
+      orchestrator,
+      "ship it",
+      "claude",
+      onInterrupt,
+    );
+
+    try {
+      renderer.start();
+      expect(dataHandler).not.toBeNull();
+      if (!dataHandler) {
+        throw new Error("expected renderer to register a data handler");
+      }
+
+      stdoutWrite.mockClear();
+      (dataHandler as unknown as (data: Buffer) => void)(Buffer.from([12]));
+      const refreshOutput = stdoutWrite.mock.calls
+        .map((args: unknown[]) => String(args[0]))
+        .join("");
+
+      expect(hasFullEraseThenRedraw(refreshOutput)).toBe(true);
+      expect(stripAnsi(refreshOutput)).toContain("ship it");
+      expect(stripAnsi(refreshOutput)).toContain("reading files");
+      expect(onInterrupt).not.toHaveBeenCalled();
+
+      stdoutWrite.mockClear();
+      vi.advanceTimersByTime(TICK_MS);
+      const nextTick = stdoutWrite.mock.calls
+        .map((args: unknown[]) => String(args[0]))
+        .join("");
+      expect(hasFullEraseThenRedraw(nextTick)).toBe(false);
+    } finally {
+      renderer.stop();
+      Object.defineProperty(process.stdin, "isTTY", {
+        configurable: true,
+        value: originalIsTTY,
+      });
+      Object.defineProperty(process.stdin, "setRawMode", {
+        configurable: true,
+        value: originalSetRawMode,
+      });
+      process.stdin.resume = originalResume;
+      process.stdin.pause = originalPause;
+      process.stdin.on = originalOn;
+      process.stdin.removeAllListeners = originalRemoveAllListeners;
+      if (originalRows)
+        Object.defineProperty(process.stdout, "rows", originalRows);
+      if (originalColumns)
+        Object.defineProperty(process.stdout, "columns", originalColumns);
+      stdoutWrite.mockRestore();
+      vi.useRealTimers();
+    }
   });
 });
 

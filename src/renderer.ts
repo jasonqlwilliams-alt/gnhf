@@ -49,8 +49,17 @@ export interface RendererOptions {
 // ── ANSI helpers ─────────────────────────────────────────────
 
 export function stripAnsi(s: string): string {
-  // eslint-disable-next-line no-control-regex
-  return s.replace(/\x1b\[[0-9;]*m/g, "");
+  // OSC, CSI (including SGR), other ESC sequences, then leftover C0
+  // controls. Newlines stay so wrap can still split paragraphs.
+  /* eslint-disable no-control-regex -- strip OSC/CSI/C0 from agent text */
+  const stripped = s
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "")
+    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/\x1b./g, "")
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "")
+    .replace(/\t/g, " ");
+  /* eslint-enable no-control-regex */
+  return stripped;
 }
 
 // ── Cell-based render functions ──────────────────────────────
@@ -195,27 +204,29 @@ export function renderAgentMessageCells(
   status: string,
   lastAgentError?: string | null,
 ): Cell[][] {
+  const displayMessage = message === null ? null : stripAnsi(message);
+  const displayError = lastAgentError ? stripAnsi(lastAgentError) : lastAgentError;
   const lines: string[] = [];
   if (status === "waiting") {
     lines.push("waiting (backoff)...");
-    if (lastAgentError) {
-      lines.push(...wordWrap(lastAgentError, MAX_MSG_LINE_LEN, 2));
+    if (displayError) {
+      lines.push(...wordWrap(displayError, MAX_MSG_LINE_LEN, 2));
     }
-  } else if (status === "aborted" && lastAgentError) {
+  } else if (status === "aborted" && displayError) {
     lines.push(
       ...wordWrap(
-        message ?? "max consecutive failures reached",
+        displayMessage ?? "max consecutive failures reached",
         MAX_MSG_LINE_LEN,
         1,
       ),
     );
-    lines.push(...wordWrap(lastAgentError, MAX_MSG_LINE_LEN, 2));
-  } else if (status === "aborted" && !message) {
+    lines.push(...wordWrap(displayError, MAX_MSG_LINE_LEN, 2));
+  } else if (status === "aborted" && !displayMessage) {
     lines.push("max consecutive failures reached");
-  } else if (!message) {
+  } else if (!displayMessage) {
     lines.push("working...");
   } else {
-    const wrapped = wordWrap(message, MAX_MSG_LINE_LEN, MAX_MSG_LINES);
+    const wrapped = wordWrap(displayMessage, MAX_MSG_LINE_LEN, MAX_MSG_LINES);
     for (const wl of wrapped) {
       lines.push(wl);
     }
@@ -765,6 +776,7 @@ export class Renderer {
   private prevTitle: string | null = null;
   private titleSaved = false;
   private isFirstFrame = true;
+  private needsFullRedraw = false;
   private seedTop: number;
   private seedBottom: number;
   private seedSide: number;
@@ -812,6 +824,11 @@ export class Renderer {
       process.stdin.on("data", (data) => {
         if (data[0] === 3) {
           this.onInterrupt();
+          return;
+        }
+        if (data[0] === 12) {
+          this.needsFullRedraw = true;
+          this.render();
         }
       });
     }
@@ -928,12 +945,16 @@ export class Renderer {
       this.sideMeteors,
     );
 
-    if (this.isFirstFrame || resized) {
-      // Resize must erase the previous frame; cursor-home plus a rewrite
-      // leaves leftover cells from the old size.
-      const prefix = resized && !this.isFirstFrame ? "\x1b[2J\x1b[H" : "\x1b[H";
+    if (this.isFirstFrame || resized || this.needsFullRedraw) {
+      // Resize and Ctrl+L must erase the previous frame; cursor-home plus a
+      // rewrite leaves leftover cells from the old size or a desynced write.
+      const prefix =
+        (resized || this.needsFullRedraw) && !this.isFirstFrame
+          ? "\x1b[2J\x1b[H"
+          : "\x1b[H";
       process.stdout.write(prefix + nextCells.map(rowToString).join("\n"));
       this.isFirstFrame = false;
+      this.needsFullRedraw = false;
     } else {
       const changes = diffFrames(this.prevCells, nextCells);
       if (changes.length > 0) {
