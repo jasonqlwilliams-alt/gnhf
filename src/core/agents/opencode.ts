@@ -17,6 +17,12 @@ import {
 } from "./types.js";
 import { appendDebugLog, serializeError } from "../debug-log.js";
 import { shutdownChildProcess } from "./managed-process.js";
+import {
+  EMPTY_RESPONSE_CONTINUATION_PROMPT,
+  EmptyAgentResponseError,
+  addTokenUsage,
+  recoverEmptyResponseOnce,
+} from "./empty-response.js";
 
 interface OpenCodeMessagePart {
   type?: string;
@@ -388,15 +394,35 @@ export class OpenCodeAgent implements Agent {
     try {
       const server = await this.ensureServer(cwd, runController.signal);
       sessionId = await this.createSession(server, cwd, runController.signal);
-      const result = await this.streamMessage(
-        server,
-        sessionId,
-        buildPrompt(prompt, this.schema),
-        runController.signal,
-        logStream,
-        onUsage,
-        onMessage,
-      );
+      const activeSessionId = sessionId;
+      let result: AgentResult;
+      try {
+        result = await this.streamMessage(
+          server,
+          activeSessionId,
+          buildPrompt(prompt, this.schema),
+          runController.signal,
+          logStream,
+          onUsage,
+          onMessage,
+        );
+      } catch (error) {
+        result = await recoverEmptyResponseOnce(error, (empty) => {
+          appendDebugLog("opencode:output:continuation", {
+            sessionId: activeSessionId,
+            attempt: 1,
+          });
+          return this.streamMessage(
+            server,
+            activeSessionId,
+            EMPTY_RESPONSE_CONTINUATION_PROMPT,
+            runController.signal,
+            logStream,
+            (usage) => onUsage?.(addTokenUsage(empty.usage, usage)),
+            onMessage,
+          );
+        });
+      }
       appendDebugLog("opencode:run:end", {
         sessionId,
         elapsedMs: Date.now() - runStartedAt,
@@ -1101,7 +1127,13 @@ export class OpenCodeAgent implements Agent {
         sessionId,
         hasStructuredOutput: structuredOutputFromSSE !== null,
       });
-      throw new Error("OpenCode produced no final answer");
+      if (!sawSessionIdle) {
+        throw new Error("OpenCode produced no final answer");
+      }
+      throw new EmptyAgentResponseError(
+        "OpenCode produced no final answer",
+        usage,
+      );
     }
 
     try {

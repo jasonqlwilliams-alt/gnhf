@@ -16,6 +16,12 @@ import { validateAgentOutput } from "./types.js";
 import { appendDebugLog, serializeError } from "../debug-log.js";
 import { parseAgentJson } from "./json-extract.js";
 import { shutdownChildProcess } from "./managed-process.js";
+import {
+  EMPTY_RESPONSE_CONTINUATION_PROMPT,
+  EmptyAgentResponseError,
+  addTokenUsage,
+  recoverEmptyResponseOnce,
+} from "./empty-response.js";
 
 interface RovoDevRequestUsageEvent {
   input_tokens?: number;
@@ -227,22 +233,51 @@ export class RovoDevAgent implements Agent {
     try {
       const server = await this.ensureServer(cwd, runController.signal);
       sessionId = await this.createSession(server, runController.signal);
-      await this.setInlineSystemPrompt(server, sessionId, runController.signal);
+      const activeSessionId = sessionId;
+      await this.setInlineSystemPrompt(
+        server,
+        activeSessionId,
+        runController.signal,
+      );
       await this.setChatMessage(
         server,
-        sessionId,
+        activeSessionId,
         prompt,
         runController.signal,
       );
 
-      const result = await this.streamChat(
-        server,
-        sessionId,
-        runController.signal,
-        logStream,
-        onUsage,
-        onMessage,
-      );
+      let result: AgentResult;
+      try {
+        result = await this.streamChat(
+          server,
+          activeSessionId,
+          runController.signal,
+          logStream,
+          onUsage,
+          onMessage,
+        );
+      } catch (error) {
+        result = await recoverEmptyResponseOnce(error, async (empty) => {
+          appendDebugLog("rovodev:output:continuation", {
+            sessionId: activeSessionId,
+            attempt: 1,
+          });
+          await this.setChatMessage(
+            server,
+            activeSessionId,
+            EMPTY_RESPONSE_CONTINUATION_PROMPT,
+            runController.signal,
+          );
+          return this.streamChat(
+            server,
+            activeSessionId,
+            runController.signal,
+            logStream,
+            (usage) => onUsage?.(addTokenUsage(empty.usage, usage)),
+            onMessage,
+          );
+        });
+      }
       appendDebugLog("rovodev:run:end", {
         sessionId,
         elapsedMs: Date.now() - runStartedAt,
@@ -742,7 +777,10 @@ export class RovoDevAgent implements Agent {
     const finalText = latestTextSegment.trim();
     if (!finalText) {
       appendDebugLog("rovodev:output:missing", { sessionId });
-      throw new Error("rovodev returned no text output");
+      throw new EmptyAgentResponseError(
+        "rovodev returned no text output",
+        usage,
+      );
     }
 
     const schema = JSON.parse(

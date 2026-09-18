@@ -502,6 +502,65 @@ describe("AcpAgent", () => {
     await expect(agent.run("p", "/w")).rejects.toThrow(/parse|JSON/i);
   });
 
+  it("continues the same session once when the first turn has no output text", async () => {
+    const { runtime, calls } = createFakeRuntime([
+      {
+        events: [],
+        result: { status: "completed" },
+      },
+      {
+        events: [textDelta(JSON.stringify(VALID_OUTPUT))],
+        result: { status: "completed" },
+      },
+    ]);
+    const agent = makeAgent(runtime);
+
+    const result = await agent.run("do the thing", "/w");
+
+    expect(result.output).toEqual(VALID_OUTPUT);
+    expect(calls.startTurnInputs).toHaveLength(2);
+    expect(calls.startTurnInputs[0]!.text).toContain("do the thing");
+    expect(calls.startTurnInputs[1]!.text).toBe(
+      "You did not produce a final answer. Continue and provide your final summary now.",
+    );
+    expect(calls.startTurnInputs[1]!.handle).toBe(STUB_HANDLE);
+  });
+
+  it("records the original failure when a continuation is still empty", async () => {
+    const { runtime, calls } = createFakeRuntime([
+      {
+        events: [],
+        result: { status: "completed" },
+      },
+      {
+        events: [],
+        result: { status: "completed" },
+      },
+    ]);
+    const agent = makeAgent(runtime);
+
+    await expect(agent.run("do the thing", "/w")).rejects.toThrow(
+      "ACP agent returned no output text",
+    );
+    expect(calls.startTurnInputs).toHaveLength(2);
+  });
+
+  it("does not continue a failed ACP turn", async () => {
+    const { runtime, calls } = createFakeRuntime([
+      {
+        events: [],
+        result: {
+          status: "failed",
+          error: { message: "transient", retryable: true },
+        },
+      },
+    ]);
+    const agent = makeAgent(runtime);
+
+    await expect(agent.run("p", "/w")).rejects.toThrow("transient");
+    expect(calls.startTurnInputs).toHaveLength(1);
+  });
+
   it("strips a leading ```json fence and trailing ``` from the output", async () => {
     const fenced = `\`\`\`json\n${JSON.stringify(VALID_OUTPUT)}\n\`\`\``;
     const { runtime } = createFakeRuntime([
