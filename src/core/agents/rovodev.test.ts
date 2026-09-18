@@ -411,6 +411,98 @@ describe("RovoDevAgent", () => {
     expect(getPort).toHaveBeenCalledTimes(1);
   });
 
+  it("continues the same session once when the first turn has no text output", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ status: "healthy" }))
+      .mockResolvedValueOnce(
+        jsonResponse({ session_id: "session-123", title: "gnhf" }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ message: "ok", prompt_set: true }))
+      .mockResolvedValueOnce(jsonResponse({ response: "Chat message set" }))
+      .mockResolvedValueOnce(
+        textResponse(
+          [
+            "event: request-usage",
+            'data: {"input_tokens":2,"cache_write_tokens":0,"cache_read_tokens":0,"output_tokens":1}',
+            "",
+            "event: close",
+            "data: ",
+            "",
+          ].join("\n"),
+        ),
+      )
+      .mockResolvedValueOnce(jsonResponse({ response: "Chat message set" }))
+      .mockResolvedValueOnce(
+        textResponse(
+          [
+            "event: part_start",
+            'data: {"index":0,"part":{"content":"{\\"success\\":true,\\"summary\\":\\"recovered\\",\\"key_changes_made\\":[],\\"key_learnings\\":[]}","part_kind":"text"},"event_kind":"part_start"}',
+            "",
+            "event: request-usage",
+            'data: {"input_tokens":5,"cache_write_tokens":1,"cache_read_tokens":2,"output_tokens":3}',
+            "",
+            "event: close",
+            "data: ",
+            "",
+          ].join("\n"),
+        ),
+      )
+      .mockResolvedValueOnce(jsonResponse({ message: "deleted" }));
+
+    const result = await agent.run("test", "/repo");
+
+    expect(result).toMatchObject({
+      output: { summary: "recovered" },
+      usage: {
+        inputTokens: 7,
+        outputTokens: 4,
+        cacheReadTokens: 2,
+        cacheCreationTokens: 1,
+      },
+    });
+    const chatBodies = fetchMock.mock.calls
+      .filter(([url]) => url === "http://127.0.0.1:8765/v3/set_chat_message")
+      .map(([, init]) => JSON.parse(String((init as RequestInit)?.body ?? "")));
+    expect(chatBodies).toHaveLength(2);
+    expect(chatBodies[1]).toEqual({
+      message:
+        "You did not produce a final answer. Continue and provide your final summary now.",
+    });
+  });
+
+  it("fails after one continuation when rovodev still returns no text", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ status: "healthy" }))
+      .mockResolvedValueOnce(
+        jsonResponse({ session_id: "session-123", title: "gnhf" }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ message: "ok", prompt_set: true }))
+      .mockResolvedValueOnce(jsonResponse({ response: "Chat message set" }))
+      .mockResolvedValueOnce(
+        textResponse(["event: close", "data: ", ""].join("\n")),
+      )
+      .mockResolvedValueOnce(jsonResponse({ response: "Chat message set" }))
+      .mockResolvedValueOnce(
+        textResponse(["event: close", "data: ", ""].join("\n")),
+      )
+      .mockResolvedValueOnce(jsonResponse({ message: "deleted" }));
+
+    await expect(agent.run("test", "/repo")).rejects.toThrow(
+      "rovodev returned no text output",
+    );
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url]) => url === "http://127.0.0.1:8765/v3/set_chat_message",
+      ),
+    ).toHaveLength(2);
+  });
+
   it("rejects when the final text is not valid JSON", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);

@@ -124,6 +124,12 @@ function promptAsyncResponse() {
   return new Response(null, { status: 204 });
 }
 
+function promptAsyncCalls(fetchMock: Mock) {
+  return fetchMock.mock.calls.filter(
+    ([url]) => url === "http://127.0.0.1:8765/session/session-123/prompt_async",
+  );
+}
+
 function finalAnswerEvents(
   summary: string,
   usage: { input: number; output: number; read: number; write: number },
@@ -968,7 +974,7 @@ describe("OpenCodeAgent", () => {
     });
   });
 
-  it("rejects with 'OpenCode produced no final answer' when the stream ends with no structured output and no final_answer text", async () => {
+  it("continues the same session once when the first turn has no final answer", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
 
@@ -977,26 +983,106 @@ describe("OpenCodeAgent", () => {
       .mockResolvedValueOnce(jsonResponse({ id: "session-123" }))
       .mockResolvedValueOnce(
         sseResponse([
-          'data: {"directory":"/repo","payload":{"type":"message.part.updated","properties":{"sessionID":"session-123","part":{"id":"finish-1","type":"step-finish","tokens":{"input":1,"output":1,"cache":{"read":0,"write":0}}}}}}\n\n',
+          'data: {"directory":"/repo","payload":{"type":"message.updated","properties":{"sessionID":"session-123","info":{"id":"empty-1","role":"assistant","tokens":{"input":2,"output":1,"cache":{"read":0,"write":0}}}}}}\n\n',
           'data: {"directory":"/repo","payload":{"type":"session.idle","properties":{"sessionID":"session-123"}}}\n\n',
         ]),
       )
+      .mockResolvedValueOnce(promptAsyncResponse())
       .mockResolvedValueOnce(
-        jsonResponse({
-          info: {
-            tokens: { input: 1, output: 1, cache: { read: 0, write: 0 } },
-          },
-          parts: [{ type: "step-start" }],
+        sseResponse(
+          finalAnswerEvents("recovered", {
+            input: 3,
+            output: 4,
+            read: 5,
+            write: 6,
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        finalMessageResponse("recovered", {
+          input: 3,
+          output: 4,
+          read: 5,
+          write: 6,
         }),
       )
+      .mockResolvedValueOnce(jsonResponse(true));
+
+    const onUsage = vi.fn();
+    const result = await agent.run("test", "/repo", { onUsage });
+
+    expect(result).toMatchObject({
+      output: { summary: "recovered" },
+      usage: {
+        inputTokens: 5,
+        outputTokens: 5,
+        cacheReadTokens: 5,
+        cacheCreationTokens: 6,
+      },
+    });
+    expect(onUsage).toHaveBeenCalledTimes(2);
+    expect(onUsage).toHaveBeenNthCalledWith(2, result.usage);
+    expect(promptAsyncCalls(fetchMock)).toHaveLength(2);
+    const continuationBody = JSON.parse(
+      String(promptAsyncCalls(fetchMock)[1]?.[1]?.body ?? ""),
+    );
+    expect(continuationBody.parts).toEqual([
+      {
+        type: "text",
+        text: "You did not produce a final answer. Continue and provide your final summary now.",
+      },
+    ]);
+  });
+
+  it("fails after one continuation when the retry is still empty", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ healthy: true, version: "1.3.13" }))
+      .mockResolvedValueOnce(jsonResponse({ id: "session-123" }))
+      .mockResolvedValueOnce(
+        sseResponse([
+          'data: {"directory":"/repo","payload":{"type":"session.idle","properties":{"sessionID":"session-123"}}}\n\n',
+        ]),
+      )
+      .mockResolvedValueOnce(promptAsyncResponse())
+      .mockResolvedValueOnce(
+        sseResponse([
+          'data: {"directory":"/repo","payload":{"type":"session.idle","properties":{"sessionID":"session-123"}}}\n\n',
+        ]),
+      )
+      .mockResolvedValueOnce(promptAsyncResponse())
       .mockResolvedValueOnce(jsonResponse(true));
 
     await expect(agent.run("test", "/repo")).rejects.toThrow(
       "OpenCode produced no final answer",
     );
+    expect(promptAsyncCalls(fetchMock)).toHaveLength(2);
   });
 
-  it("does not fall back to reasoning-phase text when no final_answer text was emitted", async () => {
+  it("does not continue a session whose event stream closes before idle", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ healthy: true, version: "1.3.13" }))
+      .mockResolvedValueOnce(jsonResponse({ id: "session-123" }))
+      .mockResolvedValueOnce(
+        sseResponse(
+          'data: {"directory":"/repo","payload":{"type":"message.updated","properties":{"sessionID":"session-123","info":{"id":"incomplete-1","role":"assistant"}}}}\n\n',
+        ),
+      )
+      .mockResolvedValueOnce(promptAsyncResponse())
+      .mockResolvedValueOnce(jsonResponse(true));
+
+    await expect(agent.run("test", "/repo")).rejects.toThrow(
+      "OpenCode produced no final answer",
+    );
+    expect(promptAsyncCalls(fetchMock)).toHaveLength(1);
+  });
+
+  it("continues instead of parsing reasoning-phase text as a final answer", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
 
@@ -1010,14 +1096,33 @@ describe("OpenCodeAgent", () => {
         ]),
       )
       .mockResolvedValueOnce(promptAsyncResponse())
+      .mockResolvedValueOnce(
+        sseResponse(
+          finalAnswerEvents("recovered after reasoning", {
+            input: 1,
+            output: 1,
+            read: 0,
+            write: 0,
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        finalMessageResponse("recovered after reasoning", {
+          input: 1,
+          output: 1,
+          read: 0,
+          write: 0,
+        }),
+      )
       .mockResolvedValueOnce(jsonResponse(true));
 
-    await expect(agent.run("test", "/repo")).rejects.toThrow(
-      "OpenCode produced no final answer",
-    );
+    await expect(agent.run("test", "/repo")).resolves.toMatchObject({
+      output: { summary: "recovered after reasoning" },
+    });
+    expect(promptAsyncCalls(fetchMock)).toHaveLength(2);
   });
 
-  it("does not fall back to echoed user-prompt text when no final_answer text was emitted", async () => {
+  it("fails after one continuation when echoed user text remains the only output", async () => {
     const proc = createMockProcess();
     mockSpawn.mockReturnValue(proc);
 
@@ -1034,11 +1139,84 @@ describe("OpenCodeAgent", () => {
         ]),
       )
       .mockResolvedValueOnce(promptAsyncResponse())
+      .mockResolvedValueOnce(
+        sseResponse([
+          'data: {"directory":"/repo","payload":{"type":"session.idle","properties":{"sessionID":"session-123"}}}\n\n',
+        ]),
+      )
+      .mockResolvedValueOnce(promptAsyncResponse())
       .mockResolvedValueOnce(jsonResponse(true));
 
     await expect(agent.run("test", "/repo")).rejects.toThrow(
       "OpenCode produced no final answer",
     );
+    expect(promptAsyncCalls(fetchMock)).toHaveLength(2);
+  });
+
+  it("aborts a continuation instead of recording an empty-response failure", async () => {
+    const proc = createMockProcess();
+    mockSpawn.mockReturnValue(proc);
+
+    let rejectContinuationRead!: (error: unknown) => void;
+    const continuationStream = new Response(
+      new ReadableStream({
+        start() {},
+        cancel() {},
+      }),
+      { headers: { "content-type": "text/event-stream" } },
+    );
+    Object.defineProperty(continuationStream.body!, "getReader", {
+      value: () => ({
+        read: vi.fn(
+          () =>
+            new Promise<ReadableStreamReadResult<Uint8Array>>(
+              (_resolve, reject) => {
+                rejectContinuationRead = reject;
+              },
+            ),
+        ),
+        cancel: vi.fn(() => Promise.resolve()),
+      }),
+    });
+
+    let rejectContinuationPrompt!: (reason?: unknown) => void;
+    const continuationPrompt = new Promise<Response>((_resolve, reject) => {
+      rejectContinuationPrompt = reject;
+    });
+
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ healthy: true, version: "1.3.13" }))
+      .mockResolvedValueOnce(jsonResponse({ id: "session-123" }))
+      .mockResolvedValueOnce(
+        sseResponse([
+          'data: {"directory":"/repo","payload":{"type":"session.idle","properties":{"sessionID":"session-123"}}}\n\n',
+        ]),
+      )
+      .mockResolvedValueOnce(promptAsyncResponse())
+      .mockResolvedValueOnce(continuationStream)
+      .mockImplementationOnce(() => continuationPrompt)
+      .mockResolvedValueOnce(jsonResponse(true))
+      .mockResolvedValueOnce(jsonResponse(true));
+
+    const controller = new AbortController();
+    const runPromise = agent.run("test", "/repo", {
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => {
+      expect(promptAsyncCalls(fetchMock)).toHaveLength(2);
+    });
+
+    controller.abort();
+    const abortError = new DOMException(
+      "This operation was aborted",
+      "AbortError",
+    );
+    rejectContinuationPrompt(abortError);
+    rejectContinuationRead(abortError);
+
+    await expect(runPromise).rejects.toThrow("Agent was aborted");
+    expect(promptAsyncCalls(fetchMock)).toHaveLength(2);
   });
 
   it("prefers structured output from message.updated over final_answer text", async () => {
@@ -1094,6 +1272,7 @@ describe("OpenCodeAgent", () => {
     await expect(agent.run("test", "/repo")).rejects.toThrow(
       /OpenCode provider overloaded: Our servers are currently overloaded/,
     );
+    expect(promptAsyncCalls(fetchMock)).toHaveLength(1);
   });
 
   it("does not throw a JSON parse error when an overload event arrives mid-stream alongside reasoning text", async () => {

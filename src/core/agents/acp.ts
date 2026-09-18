@@ -13,6 +13,11 @@ import { appendDebugLog, serializeError } from "../debug-log.js";
 import { redactAcpTargetForLogs } from "../config.js";
 import { parseAgentJson } from "./json-extract.js";
 import {
+  EMPTY_RESPONSE_CONTINUATION_PROMPT,
+  EmptyAgentResponseError,
+  recoverEmptyResponseOnce,
+} from "./empty-response.js";
+import {
   PermanentAgentError,
   validateAgentOutput,
   type Agent,
@@ -207,37 +212,8 @@ export class AcpAgent implements Agent {
     }
     this.handle = handle;
 
-    const requestId = randomUUID();
-    appendDebugLog("acp:turn:start", {
-      target: redactAcpTargetForLogs(this.target),
-      sessionKey: this.runId,
-      requestId,
-      cwd,
-    });
-
     const acpPrompt = buildAcpPrompt(prompt, this.schema);
     const promptTokenEstimate = estimateTokens(acpPrompt.length);
-
-    const startedAt = Date.now();
-    const turn = (() => {
-      try {
-        return runtime.startTurn({
-          handle,
-          text: acpPrompt,
-          mode: "prompt",
-          requestId,
-          signal,
-        });
-      } catch (error) {
-        appendDebugLog("acp:turn:start-error", {
-          target: redactAcpTargetForLogs(this.target),
-          requestId,
-          elapsedMs: Date.now() - startedAt,
-          error: serializeAcpErrorForLog(error, this.target),
-        });
-        throw redactAcpErrorForThrow(error, this.target);
-      }
-    })();
     const iterationStartUsed = this.lastReportedUsed;
     let latestUsed = iterationStartUsed;
     // Whether any usage_update status event has set `used` for this run.
@@ -249,23 +225,6 @@ export class AcpAgent implements Agent {
     let usageUpdateReceived = iterationStartUsed > 0;
     let toolCallCount = 0;
     let agentOutputChars = 0;
-    // Buffer for the in-flight assistant message. ACP adapters stream
-    // `agent_message_chunk` notifications as many tiny `text_delta` events
-    // (often a few characters each). We accumulate them and only surface the
-    // message via `onMessage` when the message is complete - on a tool_call
-    // boundary, a stream change, or end of turn.
-    let pendingMessage = "";
-    let pendingStream: "output" | "thought" | null = null;
-    // The most recently completed output-stream message. The agent's final
-    // structured JSON answer is supposed to be the last assistant message of
-    // the turn, so this is the primary candidate to JSON.parse - separating
-    // it from intermediate prose like "Let me examine the code...".
-    let lastOutputMessage = "";
-    // Concatenation of every output-stream chunk in the turn, used as a
-    // fallback when `lastOutputMessage` doesn't parse (e.g. when the agent
-    // streams the entire response as one continuous message without any
-    // tool_call to break it up).
-    let outputBuf = "";
     const logStream = logPath ? createWriteStream(logPath) : null;
 
     const computeUsage = (): TokenUsage => {
@@ -289,21 +248,63 @@ export class AcpAgent implements Agent {
       return usage;
     };
 
-    const flushPendingMessage = () => {
-      if (pendingMessage.length > 0) {
-        if (pendingStream === "output") {
-          lastOutputMessage = pendingMessage;
-        }
-        onMessage?.(pendingMessage);
-        pendingMessage = "";
-      }
-      pendingStream = null;
-    };
+    const runTurn = async (text: string): Promise<AgentResult> => {
+      const requestId = randomUUID();
+      appendDebugLog("acp:turn:start", {
+        target: redactAcpTargetForLogs(this.target),
+        sessionKey: this.runId,
+        requestId,
+        cwd,
+      });
 
-    try {
-      // Surface an initial input-token estimate immediately so the renderer
-      // shows non-zero numbers as soon as the iteration starts.
-      onUsage?.(computeUsage());
+      const startedAt = Date.now();
+      const turn = (() => {
+        try {
+          return runtime.startTurn({
+            handle,
+            text,
+            mode: "prompt",
+            requestId,
+            signal,
+          });
+        } catch (error) {
+          appendDebugLog("acp:turn:start-error", {
+            target: redactAcpTargetForLogs(this.target),
+            requestId,
+            elapsedMs: Date.now() - startedAt,
+            error: serializeAcpErrorForLog(error, this.target),
+          });
+          throw redactAcpErrorForThrow(error, this.target);
+        }
+      })();
+      // Buffer for the in-flight assistant message. ACP adapters stream
+      // `agent_message_chunk` notifications as many tiny `text_delta` events
+      // (often a few characters each). We accumulate them and only surface the
+      // message via `onMessage` when the message is complete - on a tool_call
+      // boundary, a stream change, or end of turn.
+      let pendingMessage = "";
+      let pendingStream: "output" | "thought" | null = null;
+      // The most recently completed output-stream message. The agent's final
+      // structured JSON answer is supposed to be the last assistant message of
+      // the turn, so this is the primary candidate to JSON.parse - separating
+      // it from intermediate prose like "Let me examine the code...".
+      let lastOutputMessage = "";
+      // Concatenation of every output-stream chunk in the turn, used as a
+      // fallback when `lastOutputMessage` doesn't parse (e.g. when the agent
+      // streams the entire response as one continuous message without any
+      // tool_call to break it up).
+      let outputBuf = "";
+
+      const flushPendingMessage = () => {
+        if (pendingMessage.length > 0) {
+          if (pendingStream === "output") {
+            lastOutputMessage = pendingMessage;
+          }
+          onMessage?.(pendingMessage);
+          pendingMessage = "";
+        }
+        pendingStream = null;
+      };
 
       try {
         for await (const event of turn.events) {
@@ -311,13 +312,13 @@ export class AcpAgent implements Agent {
 
           if (event.type === "text_delta") {
             const stream = event.stream ?? "output";
-            const text = event.text;
-            if (!text) continue;
+            const eventText = event.text;
+            if (!eventText) continue;
             if (pendingStream !== null && pendingStream !== stream) {
               flushPendingMessage();
             }
             pendingStream = stream;
-            pendingMessage += text;
+            pendingMessage += eventText;
             // Count both output and thought streams toward output tokens -
             // reasoning is real generated text that consumes tokens. Without
             // this, agents that stream reasoning before answering (Gemini,
@@ -325,9 +326,9 @@ export class AcpAgent implements Agent {
             // entire thinking phase. outputBuf stays output-only because it
             // is used for JSON parsing and reasoning text would corrupt it.
             if (stream === "output") {
-              outputBuf += text;
+              outputBuf += eventText;
             }
-            agentOutputChars += text.length;
+            agentOutputChars += eventText.length;
             onUsage?.(computeUsage());
             continue;
           }
@@ -418,7 +419,12 @@ export class AcpAgent implements Agent {
       }
 
       if (lastOutputMessage.length === 0 && outputBuf.length === 0) {
-        throw new Error("ACP agent returned no output text");
+        throw new EmptyAgentResponseError("ACP agent returned no output text", {
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheCreationTokens: 0,
+        });
       }
 
       // Try the most recent assistant message first - that's where the
@@ -439,6 +445,24 @@ export class AcpAgent implements Agent {
 
       const output = validateAgentOutput(parsed, this.schema);
       return { output, usage: computeUsage() };
+    };
+
+    try {
+      // Surface an initial input-token estimate immediately so the renderer
+      // shows non-zero numbers as soon as the iteration starts.
+      onUsage?.(computeUsage());
+      try {
+        return await runTurn(acpPrompt);
+      } catch (error) {
+        return await recoverEmptyResponseOnce(error, () => {
+          appendDebugLog("acp:output:continuation", {
+            target: redactAcpTargetForLogs(this.target),
+            sessionKey: this.runId,
+            attempt: 1,
+          });
+          return runTurn(EMPTY_RESPONSE_CONTINUATION_PROMPT);
+        });
+      }
     } finally {
       logStream?.end();
     }
