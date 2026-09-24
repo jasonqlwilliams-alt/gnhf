@@ -1,0 +1,275 @@
+# Instincts generated from https://github.com/jasonqlwilliams-alt/gnhf
+# Generated: 2026-08-30T11:35:22.468Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: gnhf-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/jasonqlwilliams-alt/gnhf
+---
+
+# Gnhf Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: fix, chore, feat, ci, docs
+
+## Evidence
+
+- 27 commits analyzed
+- Detected conventional commit pattern
+- Examples: fix(agents): surface Claude CLI exit errors (#190), docs: add captain-approved VISION.md (#197)
+
+---
+id: gnhf-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/jasonqlwilliams-alt/gnhf
+---
+
+# Gnhf Commit Length
+
+## Action
+
+Write moderate-length commit messages (~57 characters)
+
+## Evidence
+
+- Average commit message length: 57 chars
+- Based on 27 commits
+
+---
+id: gnhf-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/jasonqlwilliams-alt/gnhf
+---
+
+# Gnhf Naming Files
+
+## Action
+
+Use camelCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: camelCase
+
+---
+id: gnhf-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/jasonqlwilliams-alt/gnhf
+---
+
+# Gnhf Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: gnhf-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/jasonqlwilliams-alt/gnhf
+---
+
+# Gnhf Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: gnhf-arch-type-based
+trigger: "when adding new code"
+confidence: 0.8
+domain: architecture
+source: repo-analysis
+source_repo: https://github.com/jasonqlwilliams-alt/gnhf
+---
+
+# Gnhf Arch Type Based
+
+## Action
+
+Place code in the appropriate type folder (components/, services/, utils/, etc.)
+
+## Evidence
+
+- Type-based module organization detected
+- Folders: core, utils
+
+---
+id: gnhf-test-colocate
+trigger: "when writing tests"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/jasonqlwilliams-alt/gnhf
+---
+
+# Gnhf Test Colocate
+
+## Action
+
+Place test file next to the source file (e.g., Button.test.tsx next to Button.tsx)
+
+## Evidence
+
+- Colocated test pattern detected
+- Tests live alongside source files
+
+---
+id: gnhf-test-framework
+trigger: "when writing tests"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/jasonqlwilliams-alt/gnhf
+---
+
+# Gnhf Test Framework
+
+## Action
+
+Use vitest as the test framework
+
+## Evidence
+
+- Test framework detected: vitest
+- File pattern: *.test.ts
+
+---
+id: gnhf-test-naming
+trigger: "when creating a test file"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/jasonqlwilliams-alt/gnhf
+---
+
+# Gnhf Test Naming
+
+## Action
+
+Name test files using the pattern: *.test.ts
+
+## Evidence
+
+- File pattern: *.test.ts
+- Consistent across test files
+
+---
+id: gnhf-test-mocking
+trigger: "when mocking dependencies in tests"
+confidence: 0.75
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/jasonqlwilliams-alt/gnhf
+---
+
+# Gnhf Test Mocking
+
+## Action
+
+Use vi.mock for mocking
+
+## Evidence
+
+- Mocking pattern detected: vi.mock
+- Consistent across test files
+
+---
+id: gnhf-test-types
+trigger: "when planning tests for a feature"
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/jasonqlwilliams-alt/gnhf
+---
+
+# Gnhf Test Types
+
+## Action
+
+Write unit, integration, e2e tests to match project standards
+
+## Evidence
+
+- Test types detected: unit, integration, e2e
+- Coverage config: yes
+
+---
+id: gnhf-workflow-feature-development
+trigger: "when implementing a new feature"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/jasonqlwilliams-alt/gnhf
+---
+
+# Gnhf Workflow Feature Development
+
+## Action
+
+Follow the feature-development workflow:
+1. Add feature implementation
+2. Add tests for feature
+3. Update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~7x per month
+- Files: e2e/*, src/core/agents/*, src/*
+
+---
+id: gnhf-workflow-refactoring
+trigger: "when refactoring code"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/jasonqlwilliams-alt/gnhf
+---
+
+# Gnhf Workflow Refactoring
+
+## Action
+
+Follow the refactoring workflow:
+1. Ensure tests pass before refactor
+2. Refactor code structure
+3. Verify tests still pass
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: src/**/*
+
